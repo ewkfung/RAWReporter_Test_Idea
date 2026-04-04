@@ -1,0 +1,35 @@
+Reviewing what was provided. It is not the vision that I have for the the Report Builder. 
+Let's rework the Report Builder page.
+	The report builder page is a separate page and not a pop up
+	To access the page there is one of two ways and it is based on the user and their permissions
+		1. Consultant view
+			1. To access the report builder they have to go to the reports page select the report or selecting open builder and that will redirect to the report builder associated to that report 
+		2. Admin view
+			1. They can access the report builder through the same means as the consultant view
+			2. There is a quick access icon on the left pane that says Report Builder. When selecting that icon it leads to a default layout view of the report builder that is not associated to any report. 
+	The report builder page itself the left hand pane can still be viewed and the working area is the right pane just like all the other pages.
+	The working area has the following: 
+		Title <Text box>
+			Name of the report filled in from the report name
+		Executive Summary <Text Box> 
+		Findings Review <Text Box> 
+		Crown Jewel Analysis <Text Box> 
+		Findings Overview
+			A graph or chart that has the count of each severity. This should be in a format that can be exported to a word doc that will be built later
+		Findings 
+			This section will be the most complicated in terms of coding. First there is a button to add findings. Selecting that button will open up a window of the findings library. The user can filter by severity or tag. The user can select one or multiple findings to be added to the report. These findings will be added to just that specific report. 
+			
+			In the findings section each severity will have it's own section. 
+			When adding a finding it will populate the findings section and the findings will be placed in their appropriate severity section. 
+			
+			The user can select the finding and edit the finding to input data specific to that report. Editing the finding does not edit anything in the findings library ONLY in that report. If the user changes the severity of the finding it will move that finding to it's appropriate severity section .
+			
+			There will be a drag and drop functionality where the user can select and drag a finding and move it to a different severity. In doing so it will update that finding's severity without having to do it manually. 
+		Conclusion <Text Box> 
+		
+		At the bottom of the page there should be a button to save the edits made. 
+		
+		This will be the starting layout and other sections maybe added later. 
+		When editing text boxes there should be an autosave feature. After 5 seconds of an input or edit in any textbox it should autosave. 
+This is the layout I want to start with. 
+Update the instruct
