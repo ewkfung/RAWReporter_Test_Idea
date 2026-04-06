@@ -1,7 +1,7 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +13,9 @@ from rawreporter.models.engagement import Engagement
 from rawreporter.models.report import Report
 from rawreporter.models.report_section import ReportSection
 from rawreporter.schemas.report import ReportCreate, ReportRead, ReportSectionRead, ReportUpdate
+from rawreporter.services import audit_service
 from rawreporter.services.report_service import seed_report_sections, validate_report_for_generation
+from rawreporter.utils.enums import AuditActionEnum
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -72,7 +74,10 @@ async def create_report(
         if not engagement:
             raise HTTPException(status_code=404, detail="Engagement not found")
 
-    report = Report(**payload.model_dump())
+    data = payload.model_dump()
+    if data.get("start_date") is None:
+        data["start_date"] = date.today()
+    report = Report(**data)
     db.add(report)
     await db.flush()  # Get the report ID before seeding sections
 
@@ -89,13 +94,24 @@ async def create_report(
 @router.get("/{report_id}", response_model=ReportRead)
 async def get_report(
     report_id: UUID,
-    _: User = Depends(require_permission("report", "view")),
+    request: Request,
+    current_user: User = Depends(require_permission("report", "view")),
     db: AsyncSession = Depends(get_db),
 ):
     """Returns a single report by ID."""
     report = await db.get(Report, report_id)
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+    await audit_service.log_event(
+        session=db,
+        action=AuditActionEnum.report_viewed,
+        resource_type="report",
+        user_id=current_user.id,
+        resource_id=report_id,
+        resource_name=report.title,
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
     return report
 
 
@@ -194,7 +210,8 @@ async def unlink_report(
 @router.post("/{report_id}/archive", response_model=ReportRead)
 async def archive_report(
     report_id: UUID,
-    _: User = Depends(require_permission("report", "archive")),
+    request: Request,
+    current_user: User = Depends(require_permission("report", "archive")),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -206,6 +223,15 @@ async def archive_report(
         raise HTTPException(status_code=404, detail="Report not found")
     report.is_archived = True
     report.archived_at = datetime.now(timezone.utc)
+    await audit_service.log_event(
+        session=db,
+        action=AuditActionEnum.report_archived,
+        resource_type="report",
+        user_id=current_user.id,
+        resource_id=report_id,
+        resource_name=report.title,
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()
     await db.refresh(report)
     return report
@@ -214,7 +240,8 @@ async def archive_report(
 @router.post("/{report_id}/restore", response_model=ReportRead)
 async def restore_report(
     report_id: UUID,
-    _: User = Depends(require_permission("report", "archive")),
+    request: Request,
+    current_user: User = Depends(require_permission("report", "archive")),
     db: AsyncSession = Depends(get_db),
 ):
     """Restores an archived report back to the active list."""
@@ -223,6 +250,15 @@ async def restore_report(
         raise HTTPException(status_code=404, detail="Report not found")
     report.is_archived = False
     report.archived_at = None
+    await audit_service.log_event(
+        session=db,
+        action=AuditActionEnum.report_restored,
+        resource_type="report",
+        user_id=current_user.id,
+        resource_id=report_id,
+        resource_name=report.title,
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()
     await db.refresh(report)
     return report
@@ -233,7 +269,8 @@ async def restore_report(
 @router.delete("/{report_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_report(
     report_id: UUID,
-    _: User = Depends(require_permission("report", "delete")),
+    request: Request,
+    current_user: User = Depends(require_permission("report", "delete")),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -243,7 +280,17 @@ async def delete_report(
     report = await db.get(Report, report_id)
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+    title = report.title
     await db.delete(report)
+    await audit_service.log_event(
+        session=db,
+        action=AuditActionEnum.report_deleted,
+        resource_type="report",
+        user_id=current_user.id,
+        resource_id=report_id,
+        resource_name=title,
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()
 
 

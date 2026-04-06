@@ -14,6 +14,8 @@ from rawreporter.config import get_settings
 from rawreporter.database import get_db
 from rawreporter.models.role import Role
 from rawreporter.models.user_role import UserRole
+from rawreporter.services import audit_service
+from rawreporter.utils.enums import AuditActionEnum
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +59,24 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
             await self.user_db.update(user, {"hashed_password": updated_hash})
 
         return user
+
+    async def on_after_login(
+        self,
+        user: User,
+        request: Optional[Request] = None,
+        response=None,
+    ) -> None:
+        ip = request.client.host if request and request.client else None
+        await audit_service.log_event(
+            session=self.user_db.session,
+            action=AuditActionEnum.user_login,
+            resource_type="user",
+            user_id=user.id,
+            resource_id=user.id,
+            resource_name=user.username,
+            ip_address=ip,
+        )
+        await self.user_db.session.commit()
 
     async def on_after_register(self, user: User, request: Optional[Request] = None) -> None:
         session: AsyncSession = self.user_db.session

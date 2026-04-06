@@ -69,6 +69,17 @@ function UsersIcon() {
   );
 }
 
+function AuditLogIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+      <rect x="2" y="1" width="10" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M5 5h4M5 7.5h4M5 10h2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="12.5" cy="12.5" r="2.5" fill="var(--color-white)" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M11.5 12.5h2M12.5 11.5v2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 // ── Nav items ──────────────────────────────────────────────────────────────
 
 const NAV_ITEMS = [
@@ -84,6 +95,7 @@ const NAV_ITEMS = [
 export function Sidebar() {
   const { user, logout } = useAuthStore();
   const canViewUsers = usePermission("user", "view");
+  const canViewAuditLog = usePermission("audit_log", "view");
   const { sidebarCollapsed, toggleSidebar } = React.useContext(LayoutContext);
 
   const w = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
@@ -177,7 +189,7 @@ export function Sidebar() {
           </NavLink>
         ))}
 
-        {canViewUsers && (
+        {(canViewUsers || canViewAuditLog) && (
           <div style={{ marginTop: 16 }}>
             {!sidebarCollapsed && (
               <p style={{
@@ -193,31 +205,60 @@ export function Sidebar() {
                 Settings
               </p>
             )}
-            <NavLink
-              to="/settings/users"
-              title={sidebarCollapsed ? "Users" : undefined}
-              style={({ isActive }) => ({
-                display: "flex",
-                alignItems: "center",
-                justifyContent: sidebarCollapsed ? "center" : "flex-start",
-                gap: 10,
-                padding: sidebarCollapsed ? "9px 0" : "8px 12px",
-                borderRadius: "var(--radius-sm)",
-                fontSize: 14,
-                fontWeight: isActive ? 600 : 400,
-                color: isActive ? "var(--color-primary)" : "var(--color-gray-500)",
-                background: isActive ? "var(--color-primary-light)" : "transparent",
-                borderLeft: (!sidebarCollapsed && isActive) ? "2px solid var(--color-primary)" : "2px solid transparent",
-                marginBottom: 2,
-                transition: "background 0.1s, color 0.1s",
-                textDecoration: "none",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-              })}
-            >
-              <UsersIcon />
-              {!sidebarCollapsed && "Users"}
-            </NavLink>
+            {canViewUsers && (
+              <NavLink
+                to="/settings/users"
+                title={sidebarCollapsed ? "Users" : undefined}
+                style={({ isActive }) => ({
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: sidebarCollapsed ? "center" : "flex-start",
+                  gap: 10,
+                  padding: sidebarCollapsed ? "9px 0" : "8px 12px",
+                  borderRadius: "var(--radius-sm)",
+                  fontSize: 14,
+                  fontWeight: isActive ? 600 : 400,
+                  color: isActive ? "var(--color-primary)" : "var(--color-gray-500)",
+                  background: isActive ? "var(--color-primary-light)" : "transparent",
+                  borderLeft: (!sidebarCollapsed && isActive) ? "2px solid var(--color-primary)" : "2px solid transparent",
+                  marginBottom: 2,
+                  transition: "background 0.1s, color 0.1s",
+                  textDecoration: "none",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                })}
+              >
+                <UsersIcon />
+                {!sidebarCollapsed && "Users"}
+              </NavLink>
+            )}
+            {canViewAuditLog && (
+              <NavLink
+                to="/settings/audit-log"
+                title={sidebarCollapsed ? "Logs" : undefined}
+                style={({ isActive }) => ({
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: sidebarCollapsed ? "center" : "flex-start",
+                  gap: 10,
+                  padding: sidebarCollapsed ? "9px 0" : "8px 12px",
+                  borderRadius: "var(--radius-sm)",
+                  fontSize: 14,
+                  fontWeight: isActive ? 600 : 400,
+                  color: isActive ? "var(--color-primary)" : "var(--color-gray-500)",
+                  background: isActive ? "var(--color-primary-light)" : "transparent",
+                  borderLeft: (!sidebarCollapsed && isActive) ? "2px solid var(--color-primary)" : "2px solid transparent",
+                  marginBottom: 2,
+                  transition: "background 0.1s, color 0.1s",
+                  textDecoration: "none",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                })}
+              >
+                <AuditLogIcon />
+                {!sidebarCollapsed && "Logs"}
+              </NavLink>
+            )}
           </div>
         )}
 

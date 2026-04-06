@@ -77,7 +77,7 @@ export function ReportFormModal({
   const [selectedType, setSelectedType] = React.useState<EngagementType | "">("");
   const [selectedStatus, setSelectedStatus] = React.useState("draft");
   const [startDate, setStartDate] = React.useState("");
-  const [dueDate, setDueDate] = React.useState("");
+  const [endDate, setEndDate] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
@@ -113,7 +113,7 @@ export function ReportFormModal({
       setSelectedStatus(report.status);
       setSelectedType((report.types?.[0] as EngagementType) ?? "");
       setStartDate(report.start_date ?? "");
-      setDueDate(report.due_date ?? "");
+      setEndDate(report.end_date ?? "");
       setSelectedEngagementId(report.engagement_id ?? "");
       // Resolve the client from the linked engagement so the customer dropdown is set
       const eng = allEngagements.find((e) => e.id === report.engagement_id);
@@ -125,8 +125,8 @@ export function ReportFormModal({
       setSelectedEngagementId(engagementId ?? "");
       setSelectedType("");
       setSelectedStatus("draft");
-      setStartDate("");
-      setDueDate("");
+      setStartDate(new Date().toISOString().slice(0, 10));
+      setEndDate("");
       // If an engagement was pre-filled, also pre-fill the customer
       if (engagementId) {
         const eng = allEngagements.find((e) => e.id === engagementId);
@@ -158,7 +158,7 @@ export function ReportFormModal({
   const validateAll = () => {
     const errs: Record<string, string> = {};
     if (!title.trim()) errs.title = "Report name is required";
-    if (startDate && dueDate && dueDate < startDate) errs.dueDate = "Due date must be after start date";
+    if (startDate && endDate && endDate < startDate) errs.endDate = "Due date must be after start date";
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -174,7 +174,7 @@ export function ReportFormModal({
         status: selectedStatus,
         types: selectedType ? [selectedType] : [],
         start_date: startDate || null,
-        due_date: dueDate || null,
+        end_date: endDate || null,
       };
 
       let saved: Report;
@@ -290,15 +290,15 @@ export function ReportFormModal({
             label="Start Date"
             type="date"
             value={startDate}
-            onChange={(e) => { setStartDate(e.target.value); setFieldError("dueDate", ""); }}
+            onChange={(e) => { setStartDate(e.target.value); setFieldError("endDate", ""); }}
           />
           <Input
-            label="Due Date"
+            label="End Date"
             type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-            onBlur={() => setFieldError("dueDate", startDate && dueDate && dueDate < startDate ? "Due date must be after start date" : "")}
-            error={fieldErrors.dueDate}
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            onBlur={() => setFieldError("endDate", startDate && endDate && endDate < startDate ? "Due date must be after start date" : "")}
+            error={fieldErrors.endDate}
           />
         </div>
       </div>

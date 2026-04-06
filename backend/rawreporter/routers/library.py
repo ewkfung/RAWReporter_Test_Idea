@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,11 +19,12 @@ from rawreporter.schemas.library_finding import (
     LibraryFindingUpdate,
 )
 from rawreporter.schemas.library_finding_reference import LibraryFindingReferenceRead
+from rawreporter.services import audit_service
 from rawreporter.services.library_service import (
     copy_library_finding_to_report,
     get_library_findings,
 )
-from rawreporter.utils.enums import RefTypeEnum, SeverityEnum
+from rawreporter.utils.enums import AuditActionEnum, RefTypeEnum, SeverityEnum
 
 
 class RefUpsert(BaseModel):
@@ -106,19 +107,31 @@ async def update_library_finding(
 @router.delete("/{finding_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_library_finding(
     finding_id: UUID,
-    _: User = Depends(require_permission("library_finding", "delete")),
+    request: Request,
+    current_user: User = Depends(require_permission("library_finding", "delete")),
     db: AsyncSession = Depends(get_db),
 ):
     finding = await db.get(LibraryFinding, finding_id)
     if not finding:
         raise HTTPException(status_code=404, detail="Library finding not found")
+    title = finding.title
     await db.delete(finding)
+    await audit_service.log_event(
+        session=db,
+        action=AuditActionEnum.library_finding_deleted,
+        resource_type="library_finding",
+        user_id=current_user.id,
+        resource_id=finding_id,
+        resource_name=title,
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()
 
 
 @router.post("/{finding_id}/archive", response_model=LibraryFindingRead)
 async def archive_library_finding(
     finding_id: UUID,
+    request: Request,
     user: User = Depends(require_permission("library_finding", "archive")),
     db: AsyncSession = Depends(get_db),
 ):
@@ -130,6 +143,15 @@ async def archive_library_finding(
     finding.is_archived = True
     finding.archived_at = datetime.now(timezone.utc)
     finding.archived_by = user.id
+    await audit_service.log_event(
+        session=db,
+        action=AuditActionEnum.library_finding_archived,
+        resource_type="library_finding",
+        user_id=user.id,
+        resource_id=finding_id,
+        resource_name=finding.title,
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()
     await db.refresh(finding)
     return finding
@@ -138,7 +160,8 @@ async def archive_library_finding(
 @router.post("/{finding_id}/restore", response_model=LibraryFindingRead)
 async def restore_library_finding(
     finding_id: UUID,
-    _: User = Depends(require_permission("library_finding", "restore")),
+    request: Request,
+    current_user: User = Depends(require_permission("library_finding", "restore")),
     db: AsyncSession = Depends(get_db),
 ):
     finding = await db.get(LibraryFinding, finding_id)
@@ -149,6 +172,15 @@ async def restore_library_finding(
     finding.is_archived = False
     finding.archived_at = None
     finding.archived_by = None
+    await audit_service.log_event(
+        session=db,
+        action=AuditActionEnum.library_finding_restored,
+        resource_type="library_finding",
+        user_id=current_user.id,
+        resource_id=finding_id,
+        resource_name=finding.title,
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()
     await db.refresh(finding)
     return finding

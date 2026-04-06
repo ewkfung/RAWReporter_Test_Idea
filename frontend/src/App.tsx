@@ -17,6 +17,7 @@ import { ReportBuilder } from "./pages/ReportBuilder/ReportBuilder";
 import { LibraryPage } from "./pages/library/LibraryPage";
 import { LibraryArchivePage } from "./pages/library/LibraryArchivePage";
 import { UsersPage } from "./pages/settings/UsersPage";
+import { AuditLogPage } from "./pages/settings/AuditLogPage";
 
 // Placeholder for pages not yet built
 function ComingSoon({ name }: { name: string }) {
@@ -50,7 +51,8 @@ export default function App() {
           <Route path="/library"          element={<ErrorBoundary><LibraryPage /></ErrorBoundary>} />
           <Route path="/library/archive"  element={<ErrorBoundary><LibraryArchivePage /></ErrorBoundary>} />
           <Route path="/library/:id"      element={<ComingSoon name="Library Finding Detail" />} />
-          <Route path="/settings/users"   element={<ErrorBoundary><UsersPage /></ErrorBoundary>} />
+          <Route path="/settings/users"       element={<ErrorBoundary><UsersPage /></ErrorBoundary>} />
+          <Route path="/settings/audit-log"  element={<ErrorBoundary><AuditLogPage /></ErrorBoundary>} />
         </Route>
 
         {/* Fallback */}

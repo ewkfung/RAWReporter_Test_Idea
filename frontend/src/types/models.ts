@@ -15,6 +15,7 @@ export type EngagementStatus =
   | "active"
   | "in_review"
   | "delivered"
+  | "completed"
   | "closed";
 
 // Report workflow progresses: draft → review → editing → final_review → complete
@@ -80,8 +81,10 @@ export interface Engagement {
   status: EngagementStatus;
   start_date: string | null;
   end_date: string | null;
+  completed_date: string | null;
   scope_description: string | null;
-  engagement_lead: string | null;
+  engagement_lead_id: string | null;
+  consultant_ids: string[];
   is_archived: boolean;
   archived_at: string | null;
   created_at: string;
@@ -96,7 +99,8 @@ export interface Report {
   status: ReportStatus;
   types: string[];          // Assessment types, e.g. ["pentest"]
   start_date: string | null;
-  due_date: string | null;
+  end_date: string | null;
+  completed_date: string | null;
   // Soft-archive: hides from the main list but data is preserved
   is_archived: boolean;
   archived_at: string | null;
@@ -209,4 +213,29 @@ export interface LibraryFinding {
 
 export function severityEffective(f: Pick<Finding, "severity_default" | "severity_override">): Severity {
   return f.severity_override ?? f.severity_default;
+}
+
+// ── Audit Log ──────────────────────────────────────────────────────────────
+
+export type AuditAction =
+  | "user_login"
+  | "client_viewed" | "client_archived" | "client_restored" | "client_deleted"
+  | "engagement_viewed" | "engagement_archived" | "engagement_restored" | "engagement_deleted"
+  | "report_viewed" | "report_archived" | "report_restored" | "report_deleted"
+  | "library_finding_archived" | "library_finding_restored" | "library_finding_deleted"
+  | "finding_deleted"
+  | "evidence_deleted"
+  | "user_created" | "user_deactivated" | "user_deleted"
+  | "user_role_assigned" | "user_password_changed";
+
+export interface AuditLog {
+  id: string;
+  user_id: string | null;
+  action: AuditAction;
+  resource_type: string;
+  resource_id: string | null;
+  resource_name: string | null;
+  details: Record<string, unknown> | null;
+  ip_address: string | null;
+  created_at: string;
 }

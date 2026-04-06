@@ -54,7 +54,8 @@ export async function createReport(data: {
   status?: string;
   types?: string[];
   start_date?: string | null;
-  due_date?: string | null;
+  end_date?: string | null;
+  completed_date?: string | null;
 }): Promise<Report> {
   const res = await apiClient.post<Report>("/reports", data);
   return res.data;
@@ -68,7 +69,8 @@ export async function updateReport(
     status?: string;
     types?: string[];
     start_date?: string | null;
-    due_date?: string | null;
+    end_date?: string | null;
+    completed_date?: string | null;
     engagement_id?: string | null;
   }
 ): Promise<Report> {

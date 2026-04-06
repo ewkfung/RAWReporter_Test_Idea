@@ -15,8 +15,10 @@ class EngagementBase(BaseModel):
     status: EngagementStatusEnum = EngagementStatusEnum.scoping
     start_date: date | None = None
     end_date: date | None = None
+    completed_date: date | None = None
     scope_description: str | None = None
-    engagement_lead: str | None = None
+    engagement_lead_id: uuid.UUID | None = None
+    consultant_ids: list[uuid.UUID] = []
 
 
 class EngagementCreate(EngagementBase):
@@ -31,8 +33,10 @@ class EngagementUpdate(BaseModel):
     status: EngagementStatusEnum | None = None
     start_date: date | None = None
     end_date: date | None = None
+    completed_date: date | None = None
     scope_description: str | None = None
-    engagement_lead: str | None = None
+    engagement_lead_id: uuid.UUID | None = None
+    consultant_ids: list[uuid.UUID] | None = None
 
 
 class EngagementRead(EngagementBase):

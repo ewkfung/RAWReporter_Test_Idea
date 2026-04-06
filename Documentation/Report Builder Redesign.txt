@@ -1,0 +1,81 @@
+Need to update a work flow which might be an overhaul of the report builder
+The idea now is the type of assessment will dictate the type of report builder.
+We will start with 5 types of assessments 
+	Vulnerability
+	Penetration Testing
+	Risk
+	Compliance 
+	Security Gap
+
+This means that there will be 5 types of report builders 
+	Vulnerability
+	Penetration Testing
+	Risk
+	Compliance 
+	Security Gap
+
+It will be a one to one association between the type of assessment and the type of report builder. 
+
+The format for each report 
+Vulnerability Report Builder 
+	Report Title (Text Box)
+	Executive Summary (Text Box)
+	Crown Jewel Analysis (Text Box)
+	Scope and Methodology (Text Box)
+	Findings Summary (Text Box)
+	Findings (Finding Selection from Findings Library)
+	Remediation Roadmap (Text Box)
+	Closing (Text Box)
+	Appendix
+
+Penetration Testing Report Builder 
+	Report Title (Text Box)
+	Executive Summary (Text Box)
+	Scope and Rules of Engagement (Text Box)
+	Methodology (Text Box)
+	Attack Path (Test Box)
+	Findings Summary (Text Box)
+	Findings (Finding Selection from Findings Library)
+	Closing (Text Box)
+	Appendix
+
+Risk Report Builder
+	Report Title (Text Box)
+	Executive Summary (Text Box)
+	Crown Jewel Analysis (Text Box)
+	Scope and Methodology (Text Box)
+	Risk Assessment Approach (Text Box)
+	Risk Assessment Result (Text Box)
+	Findings Summary (Text Box)
+	Findings (Finding Selection from Findings Library)
+	Closing (Text Box)
+	Appendix
+
+Compliance Report Builder 
+	Report Title (Text Box)
+	Executive Summary (Text Box)
+	Crown Jewel Analysis (Text Box)
+	Scope and Methodology (Text Box)
+	Compliance Framework Overview (Text Box)
+	Findings Summary (Text Box)
+	Findings (Finding Selection from Findings Library)
+	Compliance Maturity (Text Box)
+	Remediation Roadmap (Text Box)
+	Closing (Text Box)
+	Appendix
+
+Security Gap Report Builder
+	Report Title (Text Box)
+	Executive Summary (Text Box)
+	Crown Jewel Analysis (Text Box)
+	Scope and Methodology (Text Box) 
+	Gap Analysis (Text Box)
+	Findings Summary (Text Box)
+	Findings (Finding Selection from Findings Library)
+	Remediation Roadmap (Text Box)
+	Closing (Text Box)
+	Appendix
+
+The Findings is what is implemented now where there is a findings section and it is broken up into 5 different severity sub sections. The user is then able to add findings by select add findings and it opens up a window that brings up the findings library. The user is then able to select one or many findings and it will add the findings into the appropriate sub section of severity. If I need to provide acces to the githut to review what is currently in place, I can provide access. 
+
+There should be a page where I can select each type of report builder and be able to input and edit text into the text box where the text inputted will be the default text that is show when a new report is built. 

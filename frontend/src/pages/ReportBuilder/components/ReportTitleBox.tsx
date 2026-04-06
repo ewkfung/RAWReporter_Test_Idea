@@ -1,4 +1,5 @@
 import React from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { updateReport } from "../../../api/reports";
 import { SaveIndicator, useSaveState } from "./SaveIndicator";
 
@@ -9,6 +10,7 @@ interface ReportTitleBoxProps {
 }
 
 export function ReportTitleBox({ reportId, initialTitle, readOnly }: ReportTitleBoxProps) {
+  const queryClient = useQueryClient();
   const [value, setValue] = React.useState(initialTitle);
   const { state, setSaving, setSaved, setError } = useSaveState();
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -19,6 +21,7 @@ export function ReportTitleBox({ reportId, initialTitle, readOnly }: ReportTitle
     try {
       await updateReport(reportId, { title: value });
       setSaved();
+      queryClient.invalidateQueries({ queryKey: ["reports"] });
     } catch {
       setError();
     }
@@ -32,6 +35,7 @@ export function ReportTitleBox({ reportId, initialTitle, readOnly }: ReportTitle
       try {
         await updateReport(reportId, { title: e.target.value });
         setSaved();
+        queryClient.invalidateQueries({ queryKey: ["reports"] });
       } catch {
         setError();
       }

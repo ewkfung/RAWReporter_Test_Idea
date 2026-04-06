@@ -90,7 +90,7 @@ export function FindingCard({ finding, readOnly, onSaved, onDeleted }: FindingCa
   const wasExpandedRef = React.useRef(false);
   const [hasChanges, setHasChanges] = React.useState(false);
   const markDirty = React.useCallback(() => setHasChanges(true), []);
-  const { blocker } = useUnsavedChanges(isExpanded && hasChanges);
+  useUnsavedChanges(isExpanded && hasChanges);
 
   // ── Form state ────────────────────────────────────────────────────────
 
@@ -724,16 +724,6 @@ export function FindingCard({ finding, readOnly, onSaved, onDeleted }: FindingCa
         confirmVariant="danger"
       />
 
-      {/* Navigation blocker — fires when user navigates away with unsaved edits */}
-      <ConfirmModal
-        isOpen={blocker.state === "blocked"}
-        onClose={() => blocker.reset?.()}
-        onConfirm={() => blocker.proceed?.()}
-        title="Unsaved Changes"
-        message="You have unsaved changes to this finding. Leave without saving?"
-        confirmLabel="Leave Without Saving"
-        confirmVariant="danger"
-      />
     </>
   );
 }

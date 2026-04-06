@@ -23,6 +23,7 @@ class EngagementStatusEnum(str, Enum):
     active = "active"
     in_review = "in_review"
     delivered = "delivered"
+    completed = "completed"
     closed = "closed"
 
 
@@ -69,3 +70,29 @@ class ProtectionAdequacyEnum(str, Enum):
     partial = "partial"
     inadequate = "inadequate"
     unknown = "unknown"
+
+
+class AuditActionEnum(str, Enum):
+    user_login = "user_login"
+    client_viewed = "client_viewed"
+    client_archived = "client_archived"
+    client_restored = "client_restored"
+    client_deleted = "client_deleted"
+    engagement_viewed = "engagement_viewed"
+    engagement_archived = "engagement_archived"
+    engagement_restored = "engagement_restored"
+    engagement_deleted = "engagement_deleted"
+    report_viewed = "report_viewed"
+    report_archived = "report_archived"
+    report_restored = "report_restored"
+    report_deleted = "report_deleted"
+    library_finding_archived = "library_finding_archived"
+    library_finding_restored = "library_finding_restored"
+    library_finding_deleted = "library_finding_deleted"
+    finding_deleted = "finding_deleted"
+    evidence_deleted = "evidence_deleted"
+    user_created = "user_created"
+    user_deactivated = "user_deactivated"
+    user_deleted = "user_deleted"
+    user_role_assigned = "user_role_assigned"
+    user_password_changed = "user_password_changed"

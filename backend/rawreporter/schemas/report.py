@@ -23,7 +23,8 @@ class ReportBase(BaseModel):
     status: ReportStatusEnum = ReportStatusEnum.draft
     types: list[str] = []      # Assessment types, e.g. ["pentest"]
     start_date: date | None = None
-    due_date: date | None = None
+    end_date: date | None = None
+    completed_date: date | None = None
 
 
 class ReportCreate(ReportBase):
@@ -43,7 +44,8 @@ class ReportUpdate(BaseModel):
     status: ReportStatusEnum | None = None
     types: list[str] | None = None
     start_date: date | None = None
-    due_date: date | None = None
+    end_date: date | None = None
+    completed_date: date | None = None
     engagement_id: uuid.UUID | None = None
 
 

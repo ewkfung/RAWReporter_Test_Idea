@@ -48,6 +48,7 @@ _PERMISSIONS: list[tuple[str, str, str]] = [
     ("user", "delete", "Delete users"),
     ("user", "deactivate", "Deactivate users"),
     ("user", "assign_roles", "Assign roles to users"),
+    ("audit_log", "view", "View audit logs"),
 ]
 
 # Role definitions: name → (display_name, description, permission keys)

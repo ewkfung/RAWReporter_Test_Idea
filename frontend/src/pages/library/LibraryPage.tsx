@@ -236,6 +236,7 @@ export function LibraryPage() {
       )}
 
       <LibraryFindingFormModal
+        key={editingFinding?.id ?? "new"}
         isOpen={formModalOpen}
         finding={editingFinding}
         onClose={() => setFormModalOpen(false)}

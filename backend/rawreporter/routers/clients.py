@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +10,8 @@ from rawreporter.database import get_db
 from rawreporter.dependencies import require_permission
 from rawreporter.models.client import Client
 from rawreporter.schemas.client import ClientCreate, ClientRead, ClientUpdate
+from rawreporter.services import audit_service
+from rawreporter.utils.enums import AuditActionEnum
 
 router = APIRouter(prefix="/clients", tags=["clients"])
 
@@ -62,12 +64,23 @@ async def create_client(
 @router.get("/{client_id}", response_model=ClientRead)
 async def get_client(
     client_id: UUID,
-    _: User = Depends(require_permission("client", "view")),
+    request: Request,
+    current_user: User = Depends(require_permission("client", "view")),
     db: AsyncSession = Depends(get_db),
 ):
     client = await db.get(Client, client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
+    await audit_service.log_event(
+        session=db,
+        action=AuditActionEnum.client_viewed,
+        resource_type="client",
+        user_id=current_user.id,
+        resource_id=client_id,
+        resource_name=client.name,
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
     return client
 
 
@@ -97,7 +110,8 @@ async def update_client(
 @router.post("/{client_id}/archive", response_model=ClientRead)
 async def archive_client(
     client_id: UUID,
-    _: User = Depends(require_permission("client", "archive")),
+    request: Request,
+    current_user: User = Depends(require_permission("client", "archive")),
     db: AsyncSession = Depends(get_db),
 ):
     client = await db.get(Client, client_id)
@@ -105,6 +119,15 @@ async def archive_client(
         raise HTTPException(status_code=404, detail="Client not found")
     client.is_archived = True
     client.archived_at = datetime.now(timezone.utc)
+    await audit_service.log_event(
+        session=db,
+        action=AuditActionEnum.client_archived,
+        resource_type="client",
+        user_id=current_user.id,
+        resource_id=client_id,
+        resource_name=client.name,
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()
     await db.refresh(client)
     return client
@@ -113,7 +136,8 @@ async def archive_client(
 @router.post("/{client_id}/restore", response_model=ClientRead)
 async def restore_client(
     client_id: UUID,
-    _: User = Depends(require_permission("client", "archive")),
+    request: Request,
+    current_user: User = Depends(require_permission("client", "archive")),
     db: AsyncSession = Depends(get_db),
 ):
     client = await db.get(Client, client_id)
@@ -121,6 +145,15 @@ async def restore_client(
         raise HTTPException(status_code=404, detail="Client not found")
     client.is_archived = False
     client.archived_at = None
+    await audit_service.log_event(
+        session=db,
+        action=AuditActionEnum.client_restored,
+        resource_type="client",
+        user_id=current_user.id,
+        resource_id=client_id,
+        resource_name=client.name,
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()
     await db.refresh(client)
     return client
@@ -129,11 +162,22 @@ async def restore_client(
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_client(
     client_id: UUID,
-    _: User = Depends(require_permission("client", "delete")),
+    request: Request,
+    current_user: User = Depends(require_permission("client", "delete")),
     db: AsyncSession = Depends(get_db),
 ):
     client = await db.get(Client, client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
+    name = client.name
     await db.delete(client)
+    await audit_service.log_event(
+        session=db,
+        action=AuditActionEnum.client_deleted,
+        resource_type="client",
+        user_id=current_user.id,
+        resource_id=client_id,
+        resource_name=name,
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()

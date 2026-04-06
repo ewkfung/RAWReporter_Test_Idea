@@ -5,7 +5,6 @@ import { Input } from "../ui/Input";
 import { Textarea } from "../ui/Textarea";
 import { Select } from "../ui/Select";
 import { Toggle } from "../ui/Toggle";
-import { ConfirmModal } from "../ui/ConfirmModal";
 import {
   createLibraryFinding,
   updateLibraryFinding,
@@ -108,7 +107,7 @@ export function LibraryFindingFormModal({
   const [fieldErrors, setFieldErrors] = React.useState<Record<string, string>>({});
   const [hasChanges, setHasChanges] = React.useState(false);
   const markDirty = React.useCallback(() => setHasChanges(true), []);
-  const { blocker } = useUnsavedChanges(isOpen && hasChanges);
+  useUnsavedChanges(isOpen && hasChanges);
 
   // Reset dirty flag each time the modal opens
   React.useEffect(() => {
@@ -429,17 +428,6 @@ export function LibraryFindingFormModal({
         </div>
       </div>
     </Modal>
-
-    {/* Navigation blocker — fires when user navigates away with unsaved edits */}
-    <ConfirmModal
-      isOpen={blocker.state === "blocked"}
-      onClose={() => blocker.reset?.()}
-      onConfirm={() => blocker.proceed?.()}
-      title="Unsaved Changes"
-      message="You have unsaved changes to this finding. Leave without saving?"
-      confirmLabel="Leave Without Saving"
-      confirmVariant="danger"
-    />
     </>
   );
 }

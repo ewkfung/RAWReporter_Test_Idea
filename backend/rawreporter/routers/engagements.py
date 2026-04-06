@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +11,8 @@ from rawreporter.dependencies import require_permission
 from rawreporter.models.client import Client
 from rawreporter.models.engagement import Engagement
 from rawreporter.schemas.engagement import EngagementCreate, EngagementRead, EngagementUpdate
+from rawreporter.services import audit_service
+from rawreporter.utils.enums import AuditActionEnum
 
 router = APIRouter(prefix="/engagements", tags=["engagements"])
 
@@ -57,6 +59,8 @@ async def create_engagement(
     data = payload.model_dump()
     # Serialize enum values in types list to strings for JSONB
     data["types"] = [t.value if hasattr(t, "value") else t for t in data["types"]]
+    # Serialize UUID objects in consultant_ids to strings for JSONB
+    data["consultant_ids"] = [str(u) for u in data.get("consultant_ids", [])]
     engagement = Engagement(**data)
     db.add(engagement)
     await db.commit()
@@ -67,12 +71,23 @@ async def create_engagement(
 @router.get("/{engagement_id}", response_model=EngagementRead)
 async def get_engagement(
     engagement_id: UUID,
-    _: User = Depends(require_permission("engagement", "view")),
+    request: Request,
+    current_user: User = Depends(require_permission("engagement", "view")),
     db: AsyncSession = Depends(get_db),
 ):
     engagement = await db.get(Engagement, engagement_id)
     if not engagement:
         raise HTTPException(status_code=404, detail="Engagement not found")
+    await audit_service.log_event(
+        session=db,
+        action=AuditActionEnum.engagement_viewed,
+        resource_type="engagement",
+        user_id=current_user.id,
+        resource_id=engagement_id,
+        resource_name=engagement.title,
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
     return engagement
 
 
@@ -89,6 +104,8 @@ async def update_engagement(
     data = payload.model_dump(exclude_unset=True)
     if "types" in data:
         data["types"] = [t.value if hasattr(t, "value") else t for t in data["types"]]
+    if "consultant_ids" in data:
+        data["consultant_ids"] = [str(u) for u in data["consultant_ids"]]
     for field, value in data.items():
         setattr(engagement, field, value)
     await db.commit()
@@ -99,7 +116,8 @@ async def update_engagement(
 @router.post("/{engagement_id}/archive", response_model=EngagementRead)
 async def archive_engagement(
     engagement_id: UUID,
-    _: User = Depends(require_permission("engagement", "archive")),
+    request: Request,
+    current_user: User = Depends(require_permission("engagement", "archive")),
     db: AsyncSession = Depends(get_db),
 ):
     engagement = await db.get(Engagement, engagement_id)
@@ -107,6 +125,15 @@ async def archive_engagement(
         raise HTTPException(status_code=404, detail="Engagement not found")
     engagement.is_archived = True
     engagement.archived_at = datetime.now(timezone.utc)
+    await audit_service.log_event(
+        session=db,
+        action=AuditActionEnum.engagement_archived,
+        resource_type="engagement",
+        user_id=current_user.id,
+        resource_id=engagement_id,
+        resource_name=engagement.title,
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()
     await db.refresh(engagement)
     return engagement
@@ -115,7 +142,8 @@ async def archive_engagement(
 @router.post("/{engagement_id}/restore", response_model=EngagementRead)
 async def restore_engagement(
     engagement_id: UUID,
-    _: User = Depends(require_permission("engagement", "archive")),
+    request: Request,
+    current_user: User = Depends(require_permission("engagement", "archive")),
     db: AsyncSession = Depends(get_db),
 ):
     engagement = await db.get(Engagement, engagement_id)
@@ -123,6 +151,15 @@ async def restore_engagement(
         raise HTTPException(status_code=404, detail="Engagement not found")
     engagement.is_archived = False
     engagement.archived_at = None
+    await audit_service.log_event(
+        session=db,
+        action=AuditActionEnum.engagement_restored,
+        resource_type="engagement",
+        user_id=current_user.id,
+        resource_id=engagement_id,
+        resource_name=engagement.title,
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()
     await db.refresh(engagement)
     return engagement
@@ -131,11 +168,22 @@ async def restore_engagement(
 @router.delete("/{engagement_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_engagement(
     engagement_id: UUID,
-    _: User = Depends(require_permission("engagement", "delete")),
+    request: Request,
+    current_user: User = Depends(require_permission("engagement", "delete")),
     db: AsyncSession = Depends(get_db),
 ):
     engagement = await db.get(Engagement, engagement_id)
     if not engagement:
         raise HTTPException(status_code=404, detail="Engagement not found")
+    title = engagement.title
     await db.delete(engagement)
+    await audit_service.log_event(
+        session=db,
+        action=AuditActionEnum.engagement_deleted,
+        resource_type="engagement",
+        user_id=current_user.id,
+        resource_id=engagement_id,
+        resource_name=title,
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()

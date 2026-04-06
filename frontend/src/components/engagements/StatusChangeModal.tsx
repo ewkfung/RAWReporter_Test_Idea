@@ -18,6 +18,7 @@ const STATUS_OPTIONS = [
   { value: "active", label: "Active" },
   { value: "in_review", label: "In Review" },
   { value: "delivered", label: "Delivered" },
+  { value: "completed", label: "Completed" },
   { value: "closed", label: "Closed" },
 ];
 
@@ -26,6 +27,7 @@ const STATUS_LABEL: Record<EngagementStatus, string> = {
   active: "Active",
   in_review: "In Review",
   delivered: "Delivered",
+  completed: "Completed",
   closed: "Closed",
 };
 
@@ -52,7 +54,11 @@ export function StatusChangeModal({
     setSaving(true);
     setError(null);
     try {
-      await updateEngagement(engagement.id, { status: newStatus });
+      const patch: { status: EngagementStatus; completed_date?: string } = { status: newStatus };
+      if ((newStatus === "completed" || newStatus === "closed") && !engagement.completed_date) {
+        patch.completed_date = new Date().toISOString().slice(0, 10);
+      }
+      await updateEngagement(engagement.id, patch);
       toast.success(`Status updated to ${STATUS_LABEL[newStatus]}`);
       onSuccess();
     } catch (e: unknown) {

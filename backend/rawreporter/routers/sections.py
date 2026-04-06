@@ -1,3 +1,5 @@
+import uuid
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,10 +9,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from rawreporter.auth.models import User
 from rawreporter.database import get_db
 from rawreporter.dependencies import require_permission
+from rawreporter.models.report import Report
 from rawreporter.models.report_section import ReportSection
 from rawreporter.schemas.report_section import ReportSectionRead, ReportSectionUpdate
 
 router = APIRouter(prefix="/sections", tags=["sections"])
+
+
+async def _touch_report(report_id: uuid.UUID, db: AsyncSession) -> None:
+    """Bump the parent report's updated_at so the Reports page timestamp stays current."""
+    report = await db.get(Report, report_id)
+    if report:
+        report.updated_at = datetime.now(timezone.utc)
 
 
 @router.get("", response_model=list[ReportSectionRead])
@@ -51,6 +61,7 @@ async def update_section(
         raise HTTPException(status_code=404, detail="Section not found")
     for field, value in payload.model_dump(exclude_unset=True).items():
         setattr(section, field, value)
+    await _touch_report(section.report_id, db)
     await db.commit()
     await db.refresh(section)
     return section

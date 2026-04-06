@@ -14,6 +14,7 @@ import {
   restoreEngagement,
   deleteEngagement,
 } from "../../api/engagements";
+import { listUsers } from "../../api/users";
 import { formatDate } from "../../utils/formatting";
 import { TypePills, TYPE_LABEL } from "./EngagementsPage";
 import type { Engagement, EngagementStatus } from "../../types/models";
@@ -24,6 +25,7 @@ const STATUS_BADGE: Record<EngagementStatus, BadgeVariant> = {
   active: "success",
   in_review: "warning",
   delivered: "blue",
+  completed: "success",
   closed: "neutral",
 };
 
@@ -32,6 +34,7 @@ const STATUS_LABEL: Record<EngagementStatus, string> = {
   active: "Active",
   in_review: "In Review",
   delivered: "Delivered",
+  completed: "Completed",
   closed: "Closed",
 };
 
@@ -50,6 +53,18 @@ export function EngagementArchivePage() {
     queryFn: getArchivedEngagements,
     enabled: canArchive,
   });
+
+  const { data: users = [] } = useQuery({
+    queryKey: ["users"],
+    queryFn: listUsers,
+    staleTime: 120_000,
+    enabled: canArchive,
+  });
+
+  const userMap = React.useMemo(
+    () => new Map(users.map((u) => [u.id, u.username])),
+    [users]
+  );
 
   if (!canArchive) {
     return <Navigate to="/engagements" replace />;
@@ -107,6 +122,7 @@ export function EngagementArchivePage() {
               canDelete={canDelete}
               onRestore={handleRestore}
               onDelete={(e) => setDeleteTarget(e)}
+              userMap={userMap}
             />
           ))}
         </div>
@@ -132,11 +148,13 @@ function ArchivedEngagementRow({
   canDelete,
   onRestore,
   onDelete,
+  userMap,
 }: {
   engagement: Engagement;
   canDelete: boolean;
   onRestore: (e: Engagement) => Promise<void>;
   onDelete: (e: Engagement) => void;
+  userMap: Map<string, string>;
 }) {
   const [expanded, setExpanded] = React.useState(false);
   const [restoring, setRestoring] = React.useState(false);
@@ -209,10 +227,10 @@ function ArchivedEngagementRow({
       {expanded && (
         <div style={{ borderTop: "1px solid var(--color-gray-100)", padding: "14px 38px 16px", background: "var(--color-gray-50)" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px" }}>
-            {engagement.engagement_lead && (
+            {engagement.engagement_lead_id && (
               <div>
                 <div style={infoLabel}>Lead Consultant</div>
-                <div style={infoValue}>{engagement.engagement_lead}</div>
+                <div style={infoValue}>{userMap.get(engagement.engagement_lead_id) ?? "—"}</div>
               </div>
             )}
             <div>

@@ -1,4 +1,5 @@
 import React from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { updateSection } from "../../../api/sections";
 import { SaveIndicator, useSaveState } from "./SaveIndicator";
 
@@ -16,6 +17,7 @@ export function SectionTextBox({
   initialBodyText,
   readOnly,
 }: SectionTextBoxProps) {
+  const queryClient = useQueryClient();
   const [value, setValue] = React.useState(initialBodyText);
   const { state, setSaving, setSaved, setError } = useSaveState();
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -36,6 +38,7 @@ export function SectionTextBox({
     try {
       await updateSection(sectionId, { body_text: text });
       setSaved();
+      queryClient.invalidateQueries({ queryKey: ["reports"] });
     } catch {
       setError();
     }

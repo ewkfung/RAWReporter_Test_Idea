@@ -2,7 +2,7 @@ import os
 from uuid import UUID
 
 import aiofiles
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,7 +13,8 @@ from rawreporter.dependencies import require_permission
 from rawreporter.models.evidence import Evidence
 from rawreporter.models.finding import Finding
 from rawreporter.schemas.evidence import EvidenceRead
-from rawreporter.utils.enums import FileTypeEnum
+from rawreporter.services import audit_service
+from rawreporter.utils.enums import AuditActionEnum, FileTypeEnum
 
 router = APIRouter(prefix="/evidence", tags=["evidence"])
 
@@ -90,13 +91,24 @@ async def get_evidence(
 @router.delete("/{evidence_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_evidence(
     evidence_id: UUID,
-    _: User = Depends(require_permission("evidence", "delete")),
+    request: Request,
+    current_user: User = Depends(require_permission("evidence", "delete")),
     db: AsyncSession = Depends(get_db),
 ):
     evidence = await db.get(Evidence, evidence_id)
     if not evidence:
         raise HTTPException(status_code=404, detail="Evidence not found")
+    filename = evidence.filename
     if os.path.exists(evidence.file_path):
         os.remove(evidence.file_path)
     await db.delete(evidence)
+    await audit_service.log_event(
+        session=db,
+        action=AuditActionEnum.evidence_deleted,
+        resource_type="evidence",
+        user_id=current_user.id,
+        resource_id=evidence_id,
+        resource_name=filename,
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()

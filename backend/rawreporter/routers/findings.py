@@ -1,6 +1,8 @@
+import uuid
+from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,10 +23,17 @@ from rawreporter.schemas.finding import (
     FindingsBySectionRead,
     FindingUpdate,
 )
-from rawreporter.utils.enums import RefTypeEnum
-from rawreporter.services import finding_service
+from rawreporter.services import audit_service, finding_service
+from rawreporter.utils.enums import AuditActionEnum, RefTypeEnum
 
 router = APIRouter(tags=["findings"])
+
+
+async def _touch_report(report_id: uuid.UUID, db: AsyncSession) -> None:
+    """Bump the parent report's updated_at so the Reports page timestamp stays current."""
+    report = await db.get(Report, report_id)
+    if report:
+        report.updated_at = datetime.now(timezone.utc)
 
 
 @router.get("/findings", response_model=list[FindingRead])
@@ -140,6 +149,7 @@ async def update_finding(
     for field, value in non_severity_fields.items():
         setattr(finding, field, value)
 
+    await _touch_report(finding.report_id, db)
     await db.commit()
     await db.refresh(finding)
     return finding
@@ -153,6 +163,7 @@ async def update_finding_severity(
     db: AsyncSession = Depends(get_db),
 ):
     finding = await finding_service.update_finding_severity(finding_id, payload.new_severity, db)
+    await _touch_report(finding.report_id, db)
     await db.commit()
     await db.refresh(finding)
     return finding
@@ -168,6 +179,7 @@ async def move_finding(
     finding = await finding_service.move_finding_to_section(
         finding_id, payload.target_section_id, payload.new_position, db
     )
+    await _touch_report(finding.report_id, db)
     await db.commit()
     await db.refresh(finding)
     return finding
@@ -181,6 +193,7 @@ async def reorder_finding(
     db: AsyncSession = Depends(get_db),
 ):
     finding = await finding_service.reorder_finding(finding_id, payload.new_position, db)
+    await _touch_report(finding.report_id, db)
     await db.commit()
     await db.refresh(finding)
     return finding
@@ -216,6 +229,7 @@ async def replace_finding_references(
             is_visible=ref.is_visible,
         ))
 
+    await _touch_report(finding.report_id, db)
     await db.commit()
     await db.refresh(finding)
     return finding
@@ -224,11 +238,24 @@ async def replace_finding_references(
 @router.delete("/findings/{finding_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_finding(
     finding_id: UUID,
-    _: User = Depends(require_permission("finding", "delete")),
+    request: Request,
+    current_user: User = Depends(require_permission("finding", "delete")),
     db: AsyncSession = Depends(get_db),
 ):
     finding = await db.get(Finding, finding_id)
     if not finding:
         raise HTTPException(status_code=404, detail="Finding not found")
+    title = finding.title
+    report_id = finding.report_id
     await db.delete(finding)
+    await _touch_report(report_id, db)
+    await audit_service.log_event(
+        session=db,
+        action=AuditActionEnum.finding_deleted,
+        resource_type="finding",
+        user_id=current_user.id,
+        resource_id=finding_id,
+        resource_name=title,
+        ip_address=request.client.host if request.client else None,
+    )
     await db.commit()

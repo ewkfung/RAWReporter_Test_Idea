@@ -8,7 +8,7 @@ from rawreporter.auth.backend import auth_backend
 from rawreporter.auth.schemas import UserCreate, UserRead, UserUpdate
 from rawreporter.database import AsyncSessionLocal, engine
 from rawreporter.models.base import Base
-from rawreporter.routers import clients, engagements, evidence, findings, library, reports, sections, users
+from rawreporter.routers import audit, clients, engagements, evidence, findings, library, reports, sections, users
 from rawreporter.utils.seed_rbac import seed_roles_and_permissions
 
 
@@ -57,6 +57,7 @@ app.include_router(findings.router, prefix=API_PREFIX)
 app.include_router(evidence.router, prefix=API_PREFIX)
 app.include_router(library.router, prefix=API_PREFIX)
 app.include_router(users.router, prefix=API_PREFIX)
+app.include_router(audit.router, prefix=API_PREFIX)
 
 
 @app.get("/health", tags=["health"])

@@ -34,7 +34,7 @@ const STATUS_OPTIONS: Array<{ value: ReportStatus; label: string }> = [
   { value: "review",       label: "Review" },
   { value: "editing",      label: "Editing" },
   { value: "final_review", label: "Final Review" },
-  { value: "complete",     label: "Complete" },
+  { value: "complete",     label: "Completed" },
 ];
 
 const STATUS_COLORS: Record<ReportStatus, { bg: string; text: string; border: string }> = {
@@ -44,6 +44,64 @@ const STATUS_COLORS: Record<ReportStatus, { bg: string; text: string; border: st
   final_review: { bg: "#ede9fe",                  text: "#6d28d9",                  border: "#c4b5fd" },
   complete:     { bg: "#d1fae5",                  text: "#065f46",                  border: "#6ee7b7" },
 };
+
+const SECTION_LABEL: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  color: "var(--color-gray-400)",
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  margin: "0 0 10px",
+};
+
+// ── DateField sub-component ────────────────────────────────────────────────
+
+function DateField({
+  label,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 600,
+          color: "var(--color-gray-400)",
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+          marginBottom: 4,
+        }}
+      >
+        {label}
+      </div>
+      <input
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        style={{
+          fontSize: 12,
+          width: "100%",
+          padding: "5px 7px",
+          border: "1px solid var(--color-gray-200)",
+          borderRadius: "var(--radius-sm)",
+          color: value ? "var(--color-gray-700)" : "var(--color-gray-400)",
+          background: disabled ? "var(--color-gray-50)" : "var(--color-white)",
+          cursor: disabled ? "default" : "pointer",
+          boxSizing: "border-box",
+          outline: "none",
+        }}
+      />
+    </div>
+  );
+}
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -55,10 +113,26 @@ export function ReportActionsPanel({ report, findings, canEditReport }: ReportAc
   const [generateOpen, setGenerateOpen] = React.useState(false);
   const statusRef = React.useRef<HTMLDivElement>(null);
 
+  // Local date state — synced from report prop
+  const [startDate, setStartDate] = React.useState(report.start_date?.slice(0, 10) ?? "");
+  const [endDate, setEndDate] = React.useState(report.end_date?.slice(0, 10) ?? "");
+  const [completedDate, setCompletedDate] = React.useState(report.completed_date?.slice(0, 10) ?? "");
+
+  // Sync dates if the report prop updates (e.g. after status mutation)
+  React.useEffect(() => {
+    setStartDate(report.start_date?.slice(0, 10) ?? "");
+    setEndDate(report.end_date?.slice(0, 10) ?? "");
+    setCompletedDate(report.completed_date?.slice(0, 10) ?? "");
+  }, [report.start_date, report.end_date, report.completed_date]);
+
   const currentStatus = report.status as ReportStatus;
   const statusStyle = STATUS_COLORS[currentStatus] ?? STATUS_COLORS.draft;
 
-  // Close dropdown on outside click
+  // Status label — "complete" displays as "Completed"
+  const currentLabel = STATUS_OPTIONS.find((o) => o.value === currentStatus)?.label
+    ?? currentStatus.replace(/_/g, " ");
+
+  // Close status dropdown on outside click
   React.useEffect(() => {
     if (!statusOpen) return;
     const handler = (e: MouseEvent) => {
@@ -69,6 +143,19 @@ export function ReportActionsPanel({ report, findings, canEditReport }: ReportAc
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [statusOpen]);
+
+  // ── Mutations ──────────────────────────────────────────────────────────
+
+  const reportMutation = useMutation({
+    mutationFn: (patch: Parameters<typeof updateReport>[1]) => updateReport(report.id, patch),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["report", report.id] });
+      queryClient.invalidateQueries({ queryKey: ["reports"] });
+    },
+    onError: () => {
+      toast.error("Failed to save");
+    },
+  });
 
   const statusMutation = useMutation({
     mutationFn: (status: ReportStatus) => updateReport(report.id, { status }),
@@ -82,6 +169,7 @@ export function ReportActionsPanel({ report, findings, canEditReport }: ReportAc
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["report", report.id] });
+      queryClient.invalidateQueries({ queryKey: ["reports"] });
       toast.success("Status updated");
     },
     onError: (_err, _status, context) => {
@@ -94,9 +182,21 @@ export function ReportActionsPanel({ report, findings, canEditReport }: ReportAc
 
   const handleStatusSelect = (status: ReportStatus) => {
     setStatusOpen(false);
-    if (status !== currentStatus) {
-      statusMutation.mutate(status);
+    if (status === currentStatus) return;
+    statusMutation.mutate(status);
+    // Auto-fill completed_date when marking complete
+    if (status === "complete" && !report.completed_date) {
+      const today = new Date().toISOString().slice(0, 10);
+      setCompletedDate(today);
+      reportMutation.mutate({ completed_date: today });
     }
+  };
+
+  const handleDateChange = (field: "start_date" | "end_date" | "completed_date") => (value: string) => {
+    if (field === "start_date") setStartDate(value);
+    else if (field === "end_date") setEndDate(value);
+    else setCompletedDate(value);
+    reportMutation.mutate({ [field]: value || null });
   };
 
   // Generate report blocking check
@@ -116,6 +216,8 @@ export function ReportActionsPanel({ report, findings, canEditReport }: ReportAc
         display: "flex",
         flexDirection: "column",
         gap: 12,
+        maxHeight: `calc(100vh - ${BREADCRUMB_HEIGHT + 48}px)`,
+        overflowY: "auto",
       }}
     >
       {/* ── Report type card ── */}
@@ -129,28 +231,10 @@ export function ReportActionsPanel({ report, findings, canEditReport }: ReportAc
             boxShadow: "var(--shadow-sm)",
           }}
         >
-          <p
-            style={{
-              fontSize: 11,
-              fontWeight: 600,
-              color: "var(--color-gray-400)",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              margin: "0 0 8px",
-            }}
-          >
-            Report Type
-          </p>
+          <p style={SECTION_LABEL}>Report Type</p>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {report.types.map((t) => (
-              <span
-                key={t}
-                style={{
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: "var(--color-gray-700)",
-                }}
-              >
+              <span key={t} style={{ fontSize: 13, fontWeight: 500, color: "var(--color-gray-700)" }}>
                 {TYPE_LABELS[t] ?? t.replace(/_/g, " ")}
               </span>
             ))}
@@ -168,18 +252,7 @@ export function ReportActionsPanel({ report, findings, canEditReport }: ReportAc
           boxShadow: "var(--shadow-sm)",
         }}
       >
-        <p
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            color: "var(--color-gray-400)",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            margin: "0 0 10px",
-          }}
-        >
-          Status
-        </p>
+        <p style={SECTION_LABEL}>Status</p>
 
         <div ref={statusRef} style={{ position: "relative" }}>
           <button
@@ -198,11 +271,10 @@ export function ReportActionsPanel({ report, findings, canEditReport }: ReportAc
               fontSize: 13,
               fontWeight: 600,
               color: statusStyle.text,
-              textTransform: "capitalize",
               gap: 6,
             }}
           >
-            <span>{currentStatus.replace(/_/g, " ")}</span>
+            <span>{currentLabel}</span>
             {canEditReport && (
               <svg
                 width="12"
@@ -288,6 +360,39 @@ export function ReportActionsPanel({ report, findings, canEditReport }: ReportAc
         </div>
       </div>
 
+      {/* ── Dates card ── */}
+      <div
+        style={{
+          background: "var(--color-white)",
+          border: "1px solid var(--color-gray-200)",
+          borderRadius: "var(--radius-lg)",
+          padding: "14px 16px",
+          boxShadow: "var(--shadow-sm)",
+        }}
+      >
+        <p style={SECTION_LABEL}>Dates</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <DateField
+            label="Start Date"
+            value={startDate}
+            onChange={handleDateChange("start_date")}
+            disabled={!canEditReport}
+          />
+          <DateField
+            label="End Date"
+            value={endDate}
+            onChange={handleDateChange("end_date")}
+            disabled={!canEditReport}
+          />
+          <DateField
+            label="Completed Date"
+            value={completedDate}
+            onChange={handleDateChange("completed_date")}
+            disabled={!canEditReport}
+          />
+        </div>
+      </div>
+
       {/* ── Generate Report card ── */}
       <div
         style={{
@@ -298,18 +403,7 @@ export function ReportActionsPanel({ report, findings, canEditReport }: ReportAc
           boxShadow: "var(--shadow-sm)",
         }}
       >
-        <p
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            color: "var(--color-gray-400)",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            margin: "0 0 10px",
-          }}
-        >
-          Export
-        </p>
+        <p style={SECTION_LABEL}>Export</p>
         <Button
           variant="primary"
           size="sm"

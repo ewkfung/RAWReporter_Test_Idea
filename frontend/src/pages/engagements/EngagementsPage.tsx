@@ -20,6 +20,7 @@ import {
   archiveEngagement,
 } from "../../api/engagements";
 import { getClients } from "../../api/clients";
+import { listUsers } from "../../api/users";
 import {
   getReports,
   createReport,
@@ -38,6 +39,7 @@ const STATUS_BADGE: Record<EngagementStatus, BadgeVariant> = {
   active: "success",
   in_review: "warning",
   delivered: "blue",
+  completed: "success",
   closed: "neutral",
 };
 
@@ -46,6 +48,7 @@ const STATUS_LABEL: Record<EngagementStatus, string> = {
   active: "Active",
   in_review: "In Review",
   delivered: "Delivered",
+  completed: "Completed",
   closed: "Closed",
 };
 
@@ -54,6 +57,7 @@ const STATUS_BORDER: Record<EngagementStatus, string> = {
   active: "var(--color-success, #16a34a)",
   in_review: "var(--color-warning, #d97706)",
   delivered: "var(--color-primary)",
+  completed: "#059669",
   closed: "var(--color-gray-200)",
 };
 
@@ -304,7 +308,7 @@ function AddReportModal({
                   </div>
                   <div style={{ fontSize: 11, color: "var(--color-gray-400)", marginTop: 2 }}>
                     {REPORT_STATUS_LABEL[r.status] ?? r.status}
-                    {r.due_date && ` · Due ${new Date(r.due_date).toLocaleDateString()}`}
+                    {r.end_date && ` · End ${new Date(r.end_date).toLocaleDateString()}`}
                   </div>
                 </div>
               </label>
@@ -603,6 +607,7 @@ function EngagementRow({
   canArchive,
   canDelete,
   canCreateReport,
+  userMap,
 }: {
   engagement: Engagement;
   clientName: string;
@@ -616,6 +621,7 @@ function EngagementRow({
   canArchive: boolean;
   canDelete: boolean;
   canCreateReport: boolean;
+  userMap: Map<string, { username: string; first_name?: string | null; last_name?: string | null }>;
 }) {
   const navigate = useNavigate();
   const [unlinkOpen, setUnlinkOpen] = React.useState(false);
@@ -737,12 +743,34 @@ function EngagementRow({
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 32px", marginBottom: 14 }}>
             <div>
               <div style={infoLabel}>Lead Consultant</div>
-              <div style={infoValue}>{engagement.engagement_lead || "—"}</div>
+              <div style={infoValue}>
+                {engagement.engagement_lead_id
+                  ? (userMap.get(engagement.engagement_lead_id)?.username ?? "—")
+                  : "—"}
+              </div>
             </div>
             <div>
               <div style={infoLabel}>Engagement Type</div>
               <div style={{ marginTop: 4 }}>
                 <TypePills types={engagement.types} />
+              </div>
+            </div>
+            <div>
+              <div style={infoLabel}>Consultants</div>
+              <div style={infoValue}>
+                {engagement.consultant_ids && engagement.consultant_ids.length > 0
+                  ? engagement.consultant_ids
+                      .map((id) => userMap.get(id)?.username ?? id.slice(0, 8) + "…")
+                      .join(", ")
+                  : "—"}
+              </div>
+            </div>
+            <div>
+              <div style={infoLabel}>Status</div>
+              <div style={{ marginTop: 4 }}>
+                <Badge variant={STATUS_BADGE[engagement.status] ?? "neutral"}>
+                  {STATUS_LABEL[engagement.status] ?? engagement.status}
+                </Badge>
               </div>
             </div>
             <div>
@@ -754,12 +782,8 @@ function EngagementRow({
               <div style={infoValue}>{formatDate(engagement.end_date)}</div>
             </div>
             <div>
-              <div style={infoLabel}>Status</div>
-              <div style={{ marginTop: 4 }}>
-                <Badge variant={STATUS_BADGE[engagement.status] ?? "neutral"}>
-                  {STATUS_LABEL[engagement.status] ?? engagement.status}
-                </Badge>
-              </div>
+              <div style={infoLabel}>Completed Date</div>
+              <div style={infoValue}>{formatDate(engagement.completed_date)}</div>
             </div>
           </div>
           {(engagement.scope_description) && (
@@ -798,6 +822,7 @@ const FILTER_STATUS_OPTIONS = [
   { value: "active", label: "Active" },
   { value: "in_review", label: "In Review" },
   { value: "delivered", label: "Delivered" },
+  { value: "completed", label: "Completed" },
   { value: "closed", label: "Closed" },
 ];
 
@@ -848,11 +873,22 @@ export function EngagementsPage() {
     staleTime: 120_000,
   });
 
+  const { data: users = [] } = useQuery({
+    queryKey: ["users"],
+    queryFn: listUsers,
+    staleTime: 120_000,
+  });
+
   const clientMap = React.useMemo(() => {
     const m: Record<string, string> = {};
     clients.forEach((c) => (m[c.id] = c.name));
     return m;
   }, [clients]);
+
+  const userMap = React.useMemo(
+    () => new Map(users.map((u) => [u.id, u])),
+    [users]
+  );
 
   // Auto-expand / newFor from URL params — once only
   React.useEffect(() => {
@@ -1032,6 +1068,7 @@ export function EngagementsPage() {
             canArchive={canArchive}
             canDelete={canDelete}
             canCreateReport={canCreateReport}
+            userMap={userMap}
           />
         ))
       )}

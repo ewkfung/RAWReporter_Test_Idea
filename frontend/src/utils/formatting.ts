@@ -9,7 +9,6 @@ export function formatRelativeTime(date: string | Date): string {
   if (diffSec < 60) return "Just now";
   if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? "" : "s"} ago`;
   if (diffHr < 24) return `${diffHr} hour${diffHr === 1 ? "" : "s"} ago`;
-  if (diffDay < 7) return `${diffDay} day${diffDay === 1 ? "" : "s"} ago`;
 
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }

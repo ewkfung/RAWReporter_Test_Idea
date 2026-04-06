@@ -49,7 +49,8 @@ class Report(UUIDMixin, TimestampMixin, Base):
     types: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
 
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    completed_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Soft-archive — hides from the main list without permanent deletion
     is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

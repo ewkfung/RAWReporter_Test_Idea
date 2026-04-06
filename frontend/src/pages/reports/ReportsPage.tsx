@@ -5,7 +5,7 @@
  * directly (/reports/:id/build). Reports can also be created here directly
  * without needing to navigate to an engagement first.
  *
- * Each row shows: Report Name, Customer, Type, Status, Last Updated, Due Date.
+ * Each row shows: Report Name, Customer, Type, Status, Last Updated, End Date.
  * The Manage dropdown per row allows: Edit, Status Update, Archive, Delete.
  *
  * Archived reports are accessible via the "View Archive" link → /reports/archive.
@@ -377,11 +377,11 @@ function ReportRow({
           {formatRelativeTime(report.updated_at)}
         </div>
 
-        {/* Due Date */}
+        {/* End Date */}
         <div style={{ fontSize: 12, color: "var(--color-gray-500)", whiteSpace: "nowrap" }}
           onClick={(e) => e.stopPropagation()}
         >
-          {formatDate(report.due_date)}
+          {formatDate(report.end_date)}
         </div>
 
         {/* Open Builder */}
@@ -564,7 +564,7 @@ export function ReportsPage() {
           marginBottom: 8,
         }}
       >
-        {["Report Name", "Customer", "Type", "Status", "Last Updated", "Due Date", "", ""].map((h, i) => (
+        {["Report Name", "Customer", "Type", "Status", "Last Updated", "End Date", "", ""].map((h, i) => (
           <span key={i} style={{ fontSize: 11, fontWeight: 600, color: "var(--color-gray-400)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
             {h}
           </span>

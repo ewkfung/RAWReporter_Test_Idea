@@ -30,8 +30,16 @@ class Engagement(UUIDMixin, TimestampMixin, Base):
     )
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    completed_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     scope_description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    engagement_lead: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Lead: FK to users, SET NULL if user is deleted
+    engagement_lead_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # Consultants: JSONB array of user UUID strings
+    consultant_ids: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     archived_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, default=None
