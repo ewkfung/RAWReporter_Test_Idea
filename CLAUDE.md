@@ -136,6 +136,22 @@ Decisions and patterns discovered during implementation that are not
 obvious from the architecture rules alone. Read these before making
 changes to reports, engagements, or the archive system.
 
+### Document generation — Approach B (style-based)
+The uploaded .docx provides styles only. python-docx builds all body
+content programmatically using standard Word style names (Heading 1,
+Heading 2, Heading 3, Normal, List Bullet). Cover page fields are
+injected via named Word bookmarks. If a style name does not exist in
+the template, python-docx falls back to the document's default style.
+The generate endpoint returns StreamingResponse — the frontend uses
+raw fetch() (not axios) to receive binary content and trigger a
+browser download via URL.createObjectURL().
+
+### Alembic migrations for Phase 4 (add_platform_settings_table, add_document_templates_table)
+The document_templates table references engagementtypeenum with
+create_type=False (the PG enum already exists from earlier migrations).
+Platform settings uses a plain VARCHAR key (not an enum) so new keys
+can be added without migrations.
+
 ### Reports — audience field was removed entirely
 The original Report model had an `audience` (Technical / Executive) column.
 This was a design mistake — it was removed in migration d4e5f6a1b2c3.
@@ -627,6 +643,8 @@ through the report builder.
   e1f2a3b4c5d6  report_end_date_completed_date
   f2a3b4c5d6e7  add_builder_enum_values
   a3b4c5d6e7f8  add_report_default_templates
+  1c5c4eb6c776  add_platform_settings_table
+  b3dde244ed76  add_document_templates_table
 
 To run migrations: cd backend && python -m alembic upgrade head
 The db container (rr-db) must be running on port 5432.
@@ -634,24 +652,41 @@ There is no docker-compose.yml — only the db runs in Docker.
 
 ---
 
-## Document generation (Phase 4 — deferred)
+## Document generation (Phase 4 — complete)
 
-Phase 4 is deferred until after Phase 5 is complete.
-The POST /api/v1/reports/{id}/generate endpoint currently
-returns a placeholder JSON response:
-  { "status": "pending",
-    "message": "Document generation not yet implemented",
-    "report_id": "{id}" }
+POST /api/v1/reports/{id}/generate returns a streaming
+DOCX file download (StreamingResponse, application/vnd
+.openxmlformats-officedocument.wordprocessingml.document).
 
-The Generate Report button in the UI handles this gracefully
-by showing a "coming soon" message in amber text.
-
-When Phase 4 is built:
+Architecture (Approach B — style-based):
   - generators/context_builder.py builds the template context
-  - generators/docx_generator.py produces DOCX bytes
-  - Two templates: technical/base.docx, executive/base.docx
-  - The endpoint returns StreamingResponse with DOCX bytes
-  - The frontend button triggers a file download
+    from report, engagement, client, findings, and platform
+    settings (firm_name).
+  - generators/template_loader.py loads the uploaded .docx
+    base template and injects named bookmarks on the cover
+    page (RAW_REPORT_TITLE, RAW_CLIENT_NAME, etc.).
+  - generators/docx_generator.py produces DOCX bytes using
+    python-docx. The template provides styles; all body
+    content is appended programmatically.
+  - Admin uploads per-type .docx templates at
+    /settings/document-templates via the document_templates
+    API. If no template is uploaded, generation returns 422.
+  - platform_settings table stores firm_name (and future
+    global settings). Admin edits it on the templates page.
+
+Bookmark names for cover page templates:
+  RAW_REPORT_TITLE, RAW_CLIENT_NAME, RAW_ENGAGEMENT_TYPE,
+  RAW_REPORT_DATE, RAW_LEAD_CONSULTANT, RAW_PREPARED_BY
+
+Word styles used for body content:
+  Heading 1 (sections), Heading 2 (findings),
+  Heading 3 (sub-sections), Normal (body text),
+  List Bullet (references)
+
+Generation blocks if any finding has:
+  is_placement_override = True AND no override_justification
+Blocked findings are returned in the 422 response as
+  {"blocking_findings": [{id, title, section}]}
 
 ---
 
@@ -661,7 +696,20 @@ Completed:
   Phase 1 — Models + Alembic migrations          ✓
   Phase 2 — API skeleton (all CRUD routes)        ✓
   Phase 3 — Business logic (services)             ✓
-  Phase 4 — Document generation                   DEFERRED
+  Phase 4 — Document generation                   ✓
+    5-type DOCX generation (python-docx, Approach B)
+    Bookmark-based cover page injection
+    Severity count summary table
+    Findings grouped by severity in position order
+    Word TOC field (user refreshes in Word)
+    platform_settings table (firm_name)
+    document_templates table + upload/delete API
+    GET/POST/DELETE /api/v1/document-templates/{type}
+    GET/PUT /api/v1/platform-settings/{key}
+    DocumentTemplatesPage (/settings/document-templates)
+    GenerationBlockedModal
+    Generate button with download + error handling
+    11 backend tests (test_document_generation.py)
   Phase 5 Steps 1-4 — Frontend scaffold + Auth    ✓
   RBAC + Library redesign (Steps A1-A8, B1-B9)    ✓
   Phase 5 Steps 5-9 — Dashboard, Clients,         ✓
@@ -715,7 +763,7 @@ In progress:
     override modals, final polish
 
 Not yet started:
-  Phase 4 (Document generation — after Phase 5)
+  (all phases complete)
 
 ---
 

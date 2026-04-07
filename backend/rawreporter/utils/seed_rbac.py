@@ -51,6 +51,11 @@ _PERMISSIONS: list[tuple[str, str, str]] = [
     ("audit_log", "view", "View audit logs"),
     ("report_default_template", "view", "View default report templates"),
     ("report_default_template", "edit", "Edit default report templates"),
+    ("platform_setting", "view", "View platform settings"),
+    ("platform_setting", "edit", "Edit platform settings"),
+    ("document_template", "view", "View document templates"),
+    ("document_template", "upload", "Upload document templates"),
+    ("document_template", "delete", "Delete document templates"),
 ]
 
 # Role definitions: name → (display_name, description, permission keys)
@@ -73,6 +78,8 @@ _ROLES: list[tuple[str, str, str, list[str]]] = [
             "library_finding:view",
             "evidence:view", "evidence:upload", "evidence:delete",
             "report_default_template:view",
+            "platform_setting:view",
+            "document_template:view",
         ],
     ),
     (
@@ -87,6 +94,8 @@ _ROLES: list[tuple[str, str, str, list[str]]] = [
             "library_finding:view",
             "evidence:view", "evidence:upload",
             "report_default_template:view",
+            "platform_setting:view",
+            "document_template:view",
         ],
     ),
     (
@@ -101,6 +110,8 @@ _ROLES: list[tuple[str, str, str, list[str]]] = [
             "library_finding:view",
             "evidence:view",
             "report_default_template:view",
+            "platform_setting:view",
+            "document_template:view",
         ],
     ),
 ]
@@ -176,5 +187,17 @@ async def seed_roles_and_permissions(session: AsyncSession) -> None:
             session.add(UserRole(user_id=user.id, role_id=admin_role.id, assigned_by=None))
             logger.info("Backfilled Admin role for pre-RBAC user %s", user.id)
         await session.commit()
+
+    # 4. Seed platform settings defaults
+    from rawreporter.models.platform_setting import PlatformSetting  # avoid circular import
+    default_settings = [("firm_name", None)]
+    for key, value in default_settings:
+        result = await session.execute(
+            select(PlatformSetting).where(PlatformSetting.key == key)
+        )
+        if result.scalar_one_or_none() is None:
+            session.add(PlatformSetting(key=key, value=value))
+            logger.debug("Seeded platform setting: %s", key)
+    await session.commit()
 
     logger.info("seed_roles_and_permissions complete")

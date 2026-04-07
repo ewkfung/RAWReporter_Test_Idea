@@ -108,6 +108,7 @@ export function Sidebar() {
   const canViewUsers = usePermission("user", "view");
   const canViewAuditLog = usePermission("audit_log", "view");
   const canEditTemplates = usePermission("report_default_template", "edit");
+  const canUploadDocTemplates = usePermission("document_template", "upload");
   const { sidebarCollapsed, toggleSidebar } = React.useContext(LayoutContext);
 
   const w = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
@@ -201,7 +202,7 @@ export function Sidebar() {
           </NavLink>
         ))}
 
-        {(canViewUsers || canViewAuditLog || canEditTemplates) && (
+        {(canViewUsers || canViewAuditLog || canEditTemplates || canUploadDocTemplates) && (
           <div style={{ marginTop: 16 }}>
             {!sidebarCollapsed && (
               <p style={{
@@ -296,6 +297,33 @@ export function Sidebar() {
               >
                 <TemplatesIcon />
                 {!sidebarCollapsed && "Templates"}
+              </NavLink>
+            )}
+            {canUploadDocTemplates && (
+              <NavLink
+                to="/settings/document-templates"
+                title={sidebarCollapsed ? "Doc Templates" : undefined}
+                style={({ isActive }) => ({
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: sidebarCollapsed ? "center" : "flex-start",
+                  gap: 10,
+                  padding: sidebarCollapsed ? "9px 0" : "8px 12px",
+                  borderRadius: "var(--radius-sm)",
+                  fontSize: 14,
+                  fontWeight: isActive ? 600 : 400,
+                  color: isActive ? "var(--color-primary)" : "var(--color-gray-500)",
+                  background: isActive ? "var(--color-primary-light)" : "transparent",
+                  borderLeft: (!sidebarCollapsed && isActive) ? "2px solid var(--color-primary)" : "2px solid transparent",
+                  marginBottom: 2,
+                  transition: "background 0.1s, color 0.1s",
+                  textDecoration: "none",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                })}
+              >
+                <ReportsIcon />
+                {!sidebarCollapsed && "Doc Templates"}
               </NavLink>
             )}
           </div>

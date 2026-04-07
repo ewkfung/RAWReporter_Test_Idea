@@ -1,8 +1,10 @@
+import re
+import traceback
 from datetime import date, datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -312,7 +314,7 @@ async def delete_report(
     await db.commit()
 
 
-# ── Generate (Phase 4 — deferred) ─────────────────────────────────────────
+# ── Generate ──────────────────────────────────────────────────────────────
 
 @router.post("/{report_id}/generate")
 async def generate_report(
@@ -321,19 +323,40 @@ async def generate_report(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Placeholder for DOCX generation (Phase 4 — not yet implemented).
-    Before generating, validates that no findings have an unresolved
-    placement override (a finding placed in a severity section that
-    doesn't match its effective severity must have a justification).
+    Generate a DOCX report file.
+    Validates placement overrides before generation.
+    Returns a streaming DOCX file download on success.
     """
+    from rawreporter.generators.docx_generator import generate_docx
+
+    try:
+        docx_bytes = await generate_docx(report_id, db)
+    except HTTPException:
+        raise
+    except Exception:
+        logger_msg = traceback.format_exc()
+        import logging
+        logging.getLogger(__name__).error("Document generation failed:\n%s", logger_msg)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "detail": "Document generation failed. Check server logs for details.",
+                "report_id": str(report_id),
+            },
+        )
+
+    # Build filename
     report = await db.get(Report, report_id)
-    if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
+    title = report.title if report else "report"
+    date_str = datetime.utcnow().strftime("%Y%m%d")
+    title_slug = re.sub(r"[^a-z0-9_]", "", title.lower().replace(" ", "_")[:40])
+    filename = f"{title_slug}_{date_str}.docx"
 
-    await validate_report_for_generation(report_id, db)
-
-    return JSONResponse(status_code=200, content={
-        "status": "pending",
-        "message": "Document generation is not yet implemented. This endpoint will return a DOCX file download in a future phase.",
-        "report_id": str(report_id),
-    })
+    return StreamingResponse(
+        content=iter([docx_bytes]),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(docx_bytes)),
+        },
+    )

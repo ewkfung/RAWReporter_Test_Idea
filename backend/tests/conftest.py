@@ -39,6 +39,8 @@ _PERMISSIONS: list[tuple[str, str]] = [
     ("evidence", "view"), ("evidence", "upload"), ("evidence", "delete"),
     ("user", "view"), ("user", "create"), ("user", "edit"), ("user", "deactivate"), ("user", "assign_roles"),
     ("report_default_template", "view"), ("report_default_template", "edit"),
+    ("platform_setting", "view"), ("platform_setting", "edit"),
+    ("document_template", "view"), ("document_template", "upload"), ("document_template", "delete"),
 ]
 
 _ROLE_PERMISSIONS: dict[str, list[str]] = {

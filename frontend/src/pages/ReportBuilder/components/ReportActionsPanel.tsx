@@ -1,12 +1,13 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "../../../components/ui/Button";
-import { Modal } from "../../../components/ui/Modal";
 import { UserPickerOverlay, UserChip } from "../../../components/ui/UserPickerOverlay";
 import { useToast } from "../../../components/ui/useToast";
 import { updateReport } from "../../../api/reports";
 import { updateEngagement } from "../../../api/engagements";
 import { listUsers } from "../../../api/users";
+import { useAuthStore } from "../../../store/authStore";
+import { GenerationBlockedModal } from "./GenerationBlockedModal";
 import type { Engagement, Finding, Report } from "../../../types/models";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -177,9 +178,18 @@ export function ReportActionsPanel({ report, findings, canEditReport, engagement
     saveEngagement({ consultant_ids: next });
   };
 
+  const token = useAuthStore((s) => s.token);
+
   const [statusOpen, setStatusOpen] = React.useState(false);
-  const [generateOpen, setGenerateOpen] = React.useState(false);
   const statusRef = React.useRef<HTMLDivElement>(null);
+
+  // Generate report state
+  const [generating, setGenerating] = React.useState(false);
+  const [generateError, setGenerateError] = React.useState<string | null>(null);
+  const [blockingFindings, setBlockingFindings] = React.useState<
+    Array<{ id: string; title: string; section: string }>
+  >([]);
+  const [showBlockedModal, setShowBlockedModal] = React.useState(false);
 
   // Local date state — synced from report prop
   const [startDate, setStartDate] = React.useState(report.start_date?.slice(0, 10) ?? "");
@@ -267,11 +277,69 @@ export function ReportActionsPanel({ report, findings, canEditReport, engagement
     reportMutation.mutate({ [field]: value || null });
   };
 
-  // Generate report blocking check
-  const blockingFindings = findings.filter(
-    (f) => f.is_placement_override && (!f.override_justification || f.override_justification.trim() === "")
-  );
-  const isValid = blockingFindings.length === 0;
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setGenerateError(null);
+
+    try {
+      const response = await fetch(`/api/v1/reports/${report.id}/generate`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        let errorData: any = {};
+        try { errorData = await response.json(); } catch {}
+
+        // 422 with blocking_findings — placement override without justification
+        if (response.status === 422 && errorData.blocking_findings) {
+          setBlockingFindings(errorData.blocking_findings);
+          setShowBlockedModal(true);
+          return;
+        }
+
+        // 422 with upload_path — no template uploaded
+        if (response.status === 422 && errorData.upload_path) {
+          setGenerateError(
+            "No document template has been uploaded for this report type. " +
+            "An Admin must upload a template at Settings \u2192 Document Templates " +
+            "before reports can be generated."
+          );
+          return;
+        }
+
+        // Detail may be nested (dict) or a plain string
+        const detail = typeof errorData.detail === "string"
+          ? errorData.detail
+          : errorData.detail?.detail ?? "Document generation failed. Please try again.";
+        setGenerateError(detail);
+        return;
+      }
+
+      // Success — trigger DOCX download
+      const blob = await response.blob();
+      const contentDisposition = response.headers.get("Content-Disposition") ?? "";
+      const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+      const filename = filenameMatch ? filenameMatch[1] : "report.docx";
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success("Report downloaded successfully.");
+    } catch {
+      setGenerateError("Network error. Please check your connection.");
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   return (
     <div
@@ -567,10 +635,23 @@ export function ReportActionsPanel({ report, findings, canEditReport, engagement
           variant="primary"
           size="sm"
           style={{ width: "100%" }}
-          onClick={() => setGenerateOpen(true)}
+          loading={generating}
+          onClick={handleGenerate}
         >
-          Generate Report
+          {generating ? "Generating..." : "Generate Report"}
         </Button>
+        {generateError && (
+          <p
+            style={{
+              fontSize: 12,
+              color: "var(--color-danger)",
+              marginTop: 8,
+              lineHeight: 1.5,
+            }}
+          >
+            {generateError}
+          </p>
+        )}
       </div>
 
       {/* ── Lead / consultant pickers ── */}
@@ -593,82 +674,12 @@ export function ReportActionsPanel({ report, findings, canEditReport, engagement
         onClose={() => setConsultantPickerOpen(false)}
       />
 
-      {/* ── Generate modal ── */}
-      {generateOpen && (
-        <Modal
-          isOpen={generateOpen}
-          onClose={() => setGenerateOpen(false)}
-          title="Report Generation"
-          width={520}
-          footer={
-            <Button variant="secondary" onClick={() => setGenerateOpen(false)}>
-              Close
-            </Button>
-          }
-        >
-          {isValid ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div
-                style={{
-                  background: "var(--color-success-light)",
-                  border: "1px solid var(--color-success)",
-                  borderRadius: "var(--radius-md)",
-                  padding: "12px 16px",
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 10,
-                }}
-              >
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
-                  <path d="M3 9l4 4 8-8" stroke="var(--color-success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <p style={{ fontSize: 14, color: "var(--color-gray-700)", margin: 0, lineHeight: 1.5 }}>
-                  All findings are valid. Document generation will create a DOCX report in Phase 4.
-                </p>
-              </div>
-              <p style={{ fontSize: 13, color: "var(--color-gray-500)", margin: 0 }}>
-                Document generation will be implemented in Phase 4. For now, this button confirms
-                that all findings have valid placements and justifications.
-              </p>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div
-                style={{
-                  background: "var(--color-danger-light)",
-                  border: "1px solid var(--color-danger)",
-                  borderRadius: "var(--radius-md)",
-                  padding: "12px 16px",
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 10,
-                }}
-              >
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
-                  <path d="M9 3v7M9 13v1" stroke="var(--color-danger)" strokeWidth="2" strokeLinecap="round" />
-                  <circle cx="9" cy="9" r="8" stroke="var(--color-danger)" strokeWidth="1.5" />
-                </svg>
-                <div>
-                  <p style={{ fontSize: 14, fontWeight: 600, color: "var(--color-danger)", margin: "0 0 6px" }}>
-                    Cannot generate report
-                  </p>
-                  <p style={{ fontSize: 14, color: "var(--color-gray-700)", margin: "0 0 10px", lineHeight: 1.5 }}>
-                    Some findings have severity overrides without justification. Please edit these
-                    findings and provide a justification before generating.
-                  </p>
-                  <ul style={{ margin: 0, paddingLeft: 18 }}>
-                    {blockingFindings.map((f) => (
-                      <li key={f.id} style={{ fontSize: 13, color: "var(--color-danger)", marginBottom: 3 }}>
-                        {f.title}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          )}
-        </Modal>
-      )}
+      {/* ── Generation blocked modal ── */}
+      <GenerationBlockedModal
+        isOpen={showBlockedModal}
+        onClose={() => setShowBlockedModal(false)}
+        blockingFindings={blockingFindings}
+      />
     </div>
   );
 }

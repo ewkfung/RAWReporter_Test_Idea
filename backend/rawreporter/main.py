@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -9,11 +10,13 @@ from rawreporter.auth.schemas import UserCreate, UserRead, UserUpdate
 from rawreporter.database import AsyncSessionLocal, engine
 from rawreporter.models.base import Base
 from rawreporter.routers import audit, clients, engagements, evidence, findings, library, reports, sections, templates, users
+from rawreporter.routers import document_templates, platform_settings
 from rawreporter.utils.seed_rbac import seed_roles_and_permissions
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    os.makedirs("uploads/doc_templates", exist_ok=True)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     async with AsyncSessionLocal() as session:
@@ -59,6 +62,8 @@ app.include_router(library.router, prefix=API_PREFIX)
 app.include_router(users.router, prefix=API_PREFIX)
 app.include_router(audit.router, prefix=API_PREFIX)
 app.include_router(templates.router, prefix=API_PREFIX)
+app.include_router(document_templates.router, prefix=API_PREFIX)
+app.include_router(platform_settings.router, prefix=API_PREFIX)
 
 
 @app.get("/health", tags=["health"])

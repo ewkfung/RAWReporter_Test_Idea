@@ -19,6 +19,7 @@ import { LibraryArchivePage } from "./pages/library/LibraryArchivePage";
 import { UsersPage } from "./pages/settings/UsersPage";
 import { AuditLogPage } from "./pages/settings/AuditLogPage";
 import { DefaultTemplatesPage } from "./pages/settings/DefaultTemplatesPage";
+import { DocumentTemplatesPage } from "./pages/settings/DocumentTemplatesPage";
 
 // Placeholder for pages not yet built
 function ComingSoon({ name }: { name: string }) {
@@ -54,7 +55,8 @@ export default function App() {
           <Route path="/library/:id"      element={<ComingSoon name="Library Finding Detail" />} />
           <Route path="/settings/users"       element={<ErrorBoundary><UsersPage /></ErrorBoundary>} />
           <Route path="/settings/audit-log"  element={<ErrorBoundary><AuditLogPage /></ErrorBoundary>} />
-          <Route path="/settings/templates"  element={<ErrorBoundary><DefaultTemplatesPage /></ErrorBoundary>} />
+          <Route path="/settings/templates"           element={<ErrorBoundary><DefaultTemplatesPage /></ErrorBoundary>} />
+          <Route path="/settings/document-templates" element={<ErrorBoundary><DocumentTemplatesPage /></ErrorBoundary>} />
         </Route>
 
         {/* Fallback */}
