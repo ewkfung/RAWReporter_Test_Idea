@@ -71,11 +71,13 @@ rawreporter/
                         FindingCard, ReportActionsPanel,
                         GenerateReportButton (superseded by
                         ReportActionsPanel — no longer used)
-        settings/     UsersPage
+        settings/     UsersPage, AuditLogPage,
+                        DefaultTemplatesPage
       store/          authStore (token, user, permissions[]),
                       reportBuilderStore (sections, findingsBySection,
                         addFindings, removeFinding, reset)
       types/          models.ts
+      api/            (additional) templates.ts
 
 ---
 
@@ -293,6 +295,42 @@ and Export (Generate Report button + validation modal).
 The status badge was removed from the breadcrumb bar — it lives
 in the panel only.
 
+### Report Builder uses position-ordered render loop — no hardcoded section lookups
+ReportBuilder.tsx iterates sections sorted by position. Rendering rules:
+  - severity_filter !== null → skip (rendered inside FindingsSection)
+  - section_type === "report_title" → ReportTitleBox (with sectionId)
+  - section_type === "findings" → FindingsOverviewChart + FindingsSection
+  - else → SectionTextBox
+Each section wrapper gets id="rb-section-{section.id}" for TOC scroll-tracking.
+TableOfContents.tsx is now driven by the sections prop — no hardcoded ids.
+Legacy reports (no report_title or findings section) are handled by fallback
+blocks that render the old-style title box and findings section.
+
+### engagement_id is optional when creating a new report
+POST /api/v1/reports does not require engagement_id. Section seeding priority:
+  1. If engagement_id provided → use engagement.types[0] to seed sections
+  2. If no engagement but report.types[0] provided → use that type to seed
+  3. If neither → create empty report with no sections
+Tabletop and tsa_directive types are silently skipped (no builder defined).
+Deleting an engagement sets reports.engagement_id to NULL (SET NULL on FK).
+Do NOT add cascade="all, delete-orphan" to Engagement.reports — that would
+cascade-delete reports when an engagement is deleted.
+
+### report_default_templates — engagement_type stored as VARCHAR
+The report_default_templates table stores engagement_type as VARCHAR(64),
+not as a PostgreSQL enum, because engagement types are stored as JSONB
+in the engagements table (no engagementtypeenum PostgreSQL type exists).
+The sectiontypeenum PostgreSQL type IS used for the section_type column.
+When creating Alembic migrations that reference sectiontypeenum, use
+ENUM(name="sectiontypeenum", create_type=False) from sqlalchemy.dialects.postgresql
+to avoid "type already exists" errors.
+
+### ReportTitleBox saves to section body_text AND syncs report.title
+When a sectionId is passed (new builder reports), ReportTitleBox calls
+updateSection(sectionId, { body_text }) then updateReport(reportId, { title })
+to keep the Reports page list display current. The section body_text is the
+source of truth; report.title is a display copy. Both must be kept in sync.
+
 ### Expandable FindingCard is self-contained — no separate edit modal
 Findings in the report builder expand inline on click. The expanded form
 contains all editable fields (title, severity override, CVSS override,
@@ -342,9 +380,14 @@ archive/delete library findings.
 
 Permission format: "resource:action"
 Resources: client, engagement, report, finding,
-           library_finding, evidence, user
+           library_finding, evidence, user,
+           report_default_template, audit_log
 Actions:   view, create, edit, delete, archive, restore,
            generate, move, upload, deactivate, assign_roles
+
+report_default_template permissions:
+  view  — all roles (view default templates)
+  edit  — Admin only (edit default templates)
 
 Frontend permission check pattern:
   const canDelete = usePermission("client", "delete")
@@ -424,17 +467,52 @@ LIBRARY ARCHIVE:
   Only Admin can archive and restore.
   Archiving does not affect findings already copied into reports.
 
-SECTION ORDER (default on report creation):
-  1  executive_summary    severity_filter=None        visible=True
-  2  findings_summary     severity_filter=None        visible=True
-  3  crown_jewel          severity_filter=None        visible=True
-  4  critical_findings    severity_filter=critical    visible=True
-  5  high_findings        severity_filter=high        visible=True
-  6  medium_findings      severity_filter=medium      visible=True
-  7  low_findings         severity_filter=low         visible=True
-  8  informational        severity_filter=informational visible=True
-  9  closing              severity_filter=None        visible=True
-  10 appendix             severity_filter=None        visible=False
+SECTION STRUCTURES (per builder type — seeded by seed_report_sections):
+  engagement_id is now REQUIRED when creating a report. The engagement's
+  types[0] determines which SECTION_STRUCTURES entry to use.
+  Tabletop and tsa_directive → HTTP 422 (no builder defined).
+
+  Each builder seeds text sections + a 'findings' container section.
+  The findings container triggers seeding the 5 severity sub-sections
+  at positions container_pos+1 through container_pos+5.
+
+  Vulnerability Assessment (14 sections):
+    1 report_title, 2 executive_summary, 3 crown_jewel,
+    4 scope_and_methodology, 5 findings_summary,
+    6 findings (container), 7-11 severity sub-sections,
+    12 remediation_roadmap, 13 closing, 14 appendix
+
+  Pentest (16 sections):
+    1 report_title, 2 executive_summary,
+    3 scope_and_rules_of_engagement, 4 methodology,
+    5 findings_summary, 6 crown_jewel, 7 attack_path,
+    8 findings (container), 9-13 severity sub-sections,
+    14 remediation_roadmap, 15 closing, 16 appendix
+
+  Risk Assessment (14 sections):
+    1 report_title, 2 executive_summary,
+    3 scope_and_methodology, 4 risk_assessment_approach,
+    5 risk_assessment_result,
+    6 findings (container), 7-11 severity sub-sections,
+    12 remediation_roadmap, 13 closing, 14 appendix
+
+  Compliance Assessment (14 sections):
+    1 report_title, 2 executive_summary,
+    3 compliance_framework_overview, 4 scope_and_methodology,
+    5 compliance_maturity,
+    6 findings (container), 7-11 severity sub-sections,
+    12 remediation_roadmap, 13 closing, 14 appendix
+
+  Security Gap Assessment (14 sections):
+    1 report_title, 2 executive_summary,
+    3 scope_and_methodology, 4 gap_analysis,
+    5 findings_summary,
+    6 findings (container), 7-11 severity sub-sections,
+    12 remediation_roadmap, 13 closing, 14 appendix
+
+  Severity sub-sections (always positions container+1 to container+5):
+    critical_findings, high_findings, medium_findings,
+    low_findings, informational
 
 ---
 
@@ -490,8 +568,12 @@ Sidebar links (all authenticated users see these):
   Reports         /reports
   Library         /library        (visible to all roles)
 
-Settings section (only visible if user:view permission):
-  Users           /settings/users
+Settings section visibility:
+  Visible if any of: user:view, audit_log:view,
+                     report_default_template:edit
+  Users           /settings/users       (user:view)
+  Logs            /settings/audit-log   (audit_log:view)
+  Templates       /settings/templates   (report_default_template:edit)
 
 Routes:
   /login                    LoginPage (AuthLayout)
@@ -513,6 +595,11 @@ Routes:
   /library/:id              ComingSoon
   /settings/users           UsersPage
                             (redirects to / if no user:view)
+  /settings/audit-log       AuditLogPage
+                            (redirects to / if no audit_log:view)
+  /settings/templates       DefaultTemplatesPage
+                            (redirects to / if no
+                             report_default_template:view)
 
 There is NO standalone /findings page.
 Findings only exist within reports and are accessed
@@ -534,6 +621,12 @@ through the report builder.
   e5f6a1b2c3d4  reports_nullable_engagement
   f6a1b2c3d4e5  add_body_text_to_report_sections
   b8c9d0e1f2a3  add_observation_to_findings
+  c1d2e3f4a5b6  add_audit_logs_table
+  d2e3f4a5b6c7  engagement_lead_consultants_completed
+  0c48e60f86c2  add_completed_to_engagement_status
+  e1f2a3b4c5d6  report_end_date_completed_date
+  f2a3b4c5d6e7  add_builder_enum_values
+  a3b4c5d6e7f8  add_report_default_templates
 
 To run migrations: cd backend && python -m alembic upgrade head
 The db container (rr-db) must be running on port 5432.
@@ -574,28 +667,48 @@ Completed:
   Phase 5 Steps 5-9 — Dashboard, Clients,         ✓
     Engagements, Reports, routing
   Report overhaul — audience removed, new fields  ✓
-    (types, start_date, due_date, is_archived),
-    status enum updated (draft/review/editing/
-    final_review/complete), archive/restore,
+    (types, start_date, end_date, completed_date,
+    is_archived), status enum updated (draft/review/
+    editing/final_review/complete), archive/restore,
     report link/unlink to engagements,
     reports.engagement_id nullable (SET NULL)
+  Engagement overhaul — engagement_lead_id,       ✓
+    consultant_ids (JSONB), completed_date,
+    completed status added to enum
   Phase 5 Step 9 — Report Builder                 ✓
     Three-column layout (TOC / content / actions)
-    SectionTextBox (body_text, debounced save)
-    ReportTitleBox (debounced save)
+    SectionTextBox (body_text, debounced save,
+      collapse/expand, visibility toggle)
+    ReportTitleBox (saves to section body_text +
+      syncs report.title)
     FindingsOverviewChart (inline SVG)
     FindingsSection + SeveritySection
     FindingCard (expandable inline edit, self-
       contained save + delete)
-    TableOfContents (sticky, scroll-tracking)
+    TableOfContents (sticky, scroll-tracking,
+      dynamic from section list)
     ReportActionsPanel (report type display,
-      status dropdown, generate button)
+      status dropdown, date fields, generate button)
     observation field added full-stack
     FindingUpdate schema expanded
     PUT /findings/{id}/references endpoint added
     report:archive permission added to seed_rbac
     Collapsible responsive sidebar (LayoutContext)
     Modal focus-theft bug fixed
+  Report Builder Redesign — 5 builder types       ✓
+    (Steps A1-A5 backend, B1-B7 frontend)
+    5 engagement-type builders with fixed section
+    structures (vulnerability_assessment, pentest,
+    risk, compliance_assessment, gap_assessment)
+    report_default_templates table + API
+    GET/PUT /api/v1/templates/{type}/{section}
+    DefaultTemplatesPage (/settings/templates)
+    ReportBuilder position-ordered render loop
+    Engagement type badge in breadcrumb
+    tabletop/tsa_directive hidden from UI (legacy)
+    risk engagement type added
+    engagement_id required on report create
+    8 backend tests (test_report_builder.py)
 
 In progress:
   Phase 5 Steps 10-12 — dnd-kit drag-to-reorder,

@@ -1,25 +1,34 @@
 import React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { updateReport } from "../../../api/reports";
+import { updateSection } from "../../../api/sections";
 import { SaveIndicator, useSaveState } from "./SaveIndicator";
 
 interface ReportTitleBoxProps {
   reportId: string;
   initialTitle: string;
+  /** When provided, saves to section body_text AND syncs report.title. */
+  sectionId?: string;
   readOnly?: boolean;
 }
 
-export function ReportTitleBox({ reportId, initialTitle, readOnly }: ReportTitleBoxProps) {
+export function ReportTitleBox({ reportId, initialTitle, sectionId, readOnly }: ReportTitleBoxProps) {
   const queryClient = useQueryClient();
   const [value, setValue] = React.useState(initialTitle);
   const { state, setSaving, setSaved, setError } = useSaveState();
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleBlur = async () => {
-    if (value === initialTitle) return;
+  const save = async (text: string) => {
     setSaving();
     try {
-      await updateReport(reportId, { title: value });
+      if (sectionId) {
+        // New builder: save to section body_text, then sync report.title for list display
+        await updateSection(sectionId, { body_text: text });
+        await updateReport(reportId, { title: text });
+      } else {
+        // Legacy: save directly to report.title
+        await updateReport(reportId, { title: text });
+      }
       setSaved();
       queryClient.invalidateQueries({ queryKey: ["reports"] });
     } catch {
@@ -27,19 +36,16 @@ export function ReportTitleBox({ reportId, initialTitle, readOnly }: ReportTitle
     }
   };
 
+  const handleBlur = async () => {
+    if (value === initialTitle) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    await save(value);
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setValue(e.target.value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(async () => {
-      setSaving();
-      try {
-        await updateReport(reportId, { title: e.target.value });
-        setSaved();
-        queryClient.invalidateQueries({ queryKey: ["reports"] });
-      } catch {
-        setError();
-      }
-    }, 500);
+    debounceRef.current = setTimeout(() => save(e.target.value), 500);
   };
 
   React.useEffect(

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageLoader } from "../../components/loading/PageLoader";
 import { ErrorState } from "../../components/ui/ErrorState";
 import { getReport } from "../../api/reports";
+import { getEngagement } from "../../api/engagements";
 import { getFindingsBySection } from "../../api/findings";
 import { usePermissions } from "../../hooks/usePermission";
 import { useReportBuilderStore } from "../../store/reportBuilderStore";
@@ -13,16 +14,9 @@ import { FindingsOverviewChart } from "./components/FindingsOverviewChart";
 import { FindingsSection } from "./components/FindingsSection";
 import { ReportActionsPanel } from "./components/ReportActionsPanel";
 import { TableOfContents } from "./components/TableOfContents";
-import type { Finding, ReportSection } from "../../types/models";
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-const TEXT_SECTION_LABELS: Record<string, string> = {
-  executive_summary: "Executive Summary",
-  findings_summary: "Findings Review",
-  crown_jewel: "Crown Jewel Analysis",
-  closing: "Conclusion",
-};
+import { getTemplatesForType } from "../../api/templates";
+import { TYPE_LABEL } from "../engagements/EngagementsPage";
+import type { EngagementType, Finding, ReportSection } from "../../types/models";
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -67,6 +61,30 @@ export function ReportBuilder() {
     staleTime: 0,
   });
 
+  // Fetch engagement for builder type badge (only if report is linked)
+  const { data: engagement } = useQuery({
+    queryKey: ["engagement", report?.engagement_id],
+    queryFn: () => getEngagement(report!.engagement_id!),
+    enabled: !!report?.engagement_id,
+    staleTime: 120_000,
+  });
+
+  // Fetch default templates for this engagement type so sections with no saved
+  // body_text (e.g. reports created before templates were configured, or where
+  // seeding silently produced null) still show the expected template content.
+  const engagementTypeValue = engagement?.types?.[0] as EngagementType | undefined;
+  const { data: templateEntries = [] } = useQuery({
+    queryKey: ["templates", engagementTypeValue],
+    queryFn: () => getTemplatesForType(engagementTypeValue!),
+    enabled: !!engagementTypeValue,
+    staleTime: 120_000,
+  });
+  // Build section_type → default_body lookup
+  const templateMap = React.useMemo(
+    () => Object.fromEntries(templateEntries.map((t) => [t.section_type, t.default_body ?? ""])),
+    [templateEntries]
+  );
+
   React.useEffect(() => {
     if (!sectionData || !reportId) return;
     const secs: ReportSection[] = sectionData.map((d) => d.section);
@@ -102,15 +120,19 @@ export function ReportBuilder() {
 
   const allFindings: Finding[] = Object.values(findingsBySection).flat();
 
-  const execSection    = sections.find((s) => s.section_type === "executive_summary");
-  const summarySection = sections.find((s) => s.section_type === "findings_summary");
-  const crownSection   = sections.find((s) => s.section_type === "crown_jewel");
-  const closingSection = sections.find((s) => s.section_type === "closing");
+  // Sections sorted by position (filters out severity sub-sections for the main loop)
+  const sortedSections = [...sections].sort((a, b) => a.position - b.position);
+  const hasReportTitleSection = sortedSections.some((s) => s.section_type === "report_title");
 
   const handleRefetch = () => {
     queryClient.invalidateQueries({ queryKey: ["report-sections-with-findings", reportId] });
     refetchSections();
   };
+
+  // Engagement type badge label
+  const engagementTypeBadge = engagement?.types?.[0]
+    ? (TYPE_LABEL[engagement.types[0] as EngagementType] ?? engagement.types[0])
+    : null;
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--color-gray-50)" }}>
@@ -142,9 +164,27 @@ export function ReportBuilder() {
         <span style={{ fontSize: 13, color: "var(--color-gray-700)", fontWeight: 500 }}>
           Report Builder
         </span>
+        {engagementTypeBadge && (
+          <>
+            <span style={{ fontSize: 13, color: "var(--color-gray-300)" }}>/</span>
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                padding: "2px 10px",
+                borderRadius: 999,
+                background: "var(--color-primary-light, #eff6ff)",
+                color: "var(--color-primary)",
+                border: "1px solid #bfdbfe",
+              }}
+            >
+              {engagementTypeBadge}
+            </span>
+          </>
+        )}
       </div>
 
-      {/* Two-column layout: TOC (left) + content (right) */}
+      {/* Three-column layout: TOC (left) + content (centre) + actions (right) */}
       <div
         style={{
           maxWidth: 1400,
@@ -156,8 +196,7 @@ export function ReportBuilder() {
         }}
       >
         {/* ── Table of Contents ── */}
-        <TableOfContents findingsBySection={findingsBySection} />
-
+        <TableOfContents sections={sortedSections} findingsBySection={findingsBySection} />
 
         {/* ── Main content ── */}
         <div
@@ -170,83 +209,94 @@ export function ReportBuilder() {
             paddingBottom: 32,
           }}
         >
-          {/* Report Title */}
-          <div id="rb-title">
-            <ReportTitleBox
-              reportId={report.id}
-              initialTitle={report.title}
-              readOnly={!canEditReport}
-            />
-          </div>
-
-          {/* Executive Summary */}
-          {execSection && (
-            <div id="rb-exec-summary">
-              <SectionTextBox
-                sectionId={execSection.id}
-                sectionType={execSection.section_type}
-                title={TEXT_SECTION_LABELS["executive_summary"]}
-                initialBodyText={execSection.body_text ?? ""}
+          {/* Legacy fallback: if no report_title section exists (old reports),
+              render the title box outside the loop using report.title */}
+          {!hasReportTitleSection && (
+            <div id="rb-legacy-title">
+              <ReportTitleBox
+                reportId={report.id}
+                initialTitle={report.title}
                 readOnly={!canEditReport}
               />
             </div>
           )}
 
-          {/* Findings Review */}
-          {summarySection && (
-            <div id="rb-findings-review">
-              <SectionTextBox
-                sectionId={summarySection.id}
-                sectionType={summarySection.section_type}
-                title={TEXT_SECTION_LABELS["findings_summary"]}
-                initialBodyText={summarySection.body_text ?? ""}
-                readOnly={!canEditReport}
-              />
-            </div>
-          )}
+          {/* Position-ordered section render loop */}
+          {sortedSections.map((section) => {
+            // Skip severity sub-sections — rendered inside FindingsSection
+            if (section.severity_filter !== null) return null;
 
-          {/* Crown Jewel Analysis */}
-          {crownSection && (
-            <div id="rb-crown-jewel">
-              <SectionTextBox
-                sectionId={crownSection.id}
-                sectionType={crownSection.section_type}
-                title={TEXT_SECTION_LABELS["crown_jewel"]}
-                initialBodyText={crownSection.body_text ?? ""}
-                readOnly={!canEditReport}
-              />
-            </div>
-          )}
+            const sectionId = `rb-section-${section.id}`;
 
-          {/* Findings Overview Chart */}
-          <div id="rb-findings-overview">
-            <FindingsOverviewChart findings={allFindings} />
-          </div>
+            if (section.section_type === "report_title") {
+              return (
+                <div key={section.id} id={sectionId}>
+                  <ReportTitleBox
+                    reportId={report.id}
+                    sectionId={section.id}
+                    initialTitle={section.body_text ?? report.title}
+                    readOnly={!canEditReport}
+                  />
+                </div>
+              );
+            }
 
-          {/* Findings with severity sections */}
-          <div id="rb-findings">
-            <FindingsSection
-              reportId={report.id}
-              sections={sections}
-              findingsBySection={findingsBySection}
-              canAdd={canAddFindings}
-              canEdit={canEditFinding}
-              canDelete={canDeleteFinding}
-              onRefetch={handleRefetch}
-            />
-          </div>
+            if (section.section_type === "findings") {
+              return (
+                <React.Fragment key={section.id}>
+                  <div id="rb-findings-overview">
+                    <FindingsOverviewChart findings={allFindings} />
+                  </div>
+                  <div id={sectionId}>
+                    <FindingsSection
+                      reportId={report.id}
+                      sections={sections}
+                      findingsBySection={findingsBySection}
+                      canAdd={canAddFindings}
+                      canEdit={canEditFinding}
+                      canDelete={canDeleteFinding}
+                      onRefetch={handleRefetch}
+                    />
+                  </div>
+                </React.Fragment>
+              );
+            }
 
-          {/* Conclusion */}
-          {closingSection && (
-            <div id="rb-conclusion">
-              <SectionTextBox
-                sectionId={closingSection.id}
-                sectionType={closingSection.section_type}
-                title={TEXT_SECTION_LABELS["closing"]}
-                initialBodyText={closingSection.body_text ?? ""}
-                readOnly={!canEditReport}
-              />
-            </div>
+            return (
+              <div key={section.id} id={sectionId}>
+                <SectionTextBox
+                  sectionId={section.id}
+                  sectionType={section.section_type}
+                  title={section.title ?? section.section_type.replace(/_/g, " ")}
+                  initialBodyText={section.body_text ?? ""}
+                  templateBodyText={templateMap[section.section_type] ?? ""}
+                  isVisible={section.is_visible}
+                  canToggleVisibility={canEditReport}
+                  readOnly={!canEditReport}
+                />
+              </div>
+            );
+          })}
+
+          {/* Legacy fallback: if no findings section exists (old reports),
+              render the overview chart + findings section at the bottom */}
+          {!sortedSections.some((s) => s.section_type === "findings") && (
+            <>
+              <div id="rb-findings-overview">
+                <FindingsOverviewChart findings={allFindings} />
+              </div>
+              <div id="rb-findings">
+                <FindingsSection
+                  reportId={report.id}
+                  sections={sections}
+                  findingsBySection={findingsBySection}
+                  canAdd={canAddFindings}
+                  canEdit={canEditFinding}
+                  canDelete={canDeleteFinding}
+                  onRefetch={handleRefetch}
+                />
+              </div>
+            </>
           )}
         </div>
 
@@ -255,6 +305,7 @@ export function ReportBuilder() {
           report={report}
           findings={allFindings}
           canEditReport={canEditReport}
+          engagement={engagement}
         />
       </div>
     </div>

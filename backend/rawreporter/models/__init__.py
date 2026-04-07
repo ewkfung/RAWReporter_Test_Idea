@@ -8,6 +8,7 @@ from rawreporter.models.library_finding import LibraryFinding
 from rawreporter.models.library_finding_reference import LibraryFindingReference
 from rawreporter.models.permission import Permission
 from rawreporter.models.report import Report
+from rawreporter.models.report_default_template import ReportDefaultTemplate
 from rawreporter.models.report_section import ReportSection
 from rawreporter.models.role import Role
 from rawreporter.models.role_permission import RolePermission
@@ -23,6 +24,7 @@ __all__ = [
     "LibraryFindingReference",
     "Permission",
     "Report",
+    "ReportDefaultTemplate",
     "ReportSection",
     "Role",
     "RolePermission",

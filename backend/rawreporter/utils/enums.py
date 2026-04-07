@@ -13,9 +13,10 @@ class EngagementTypeEnum(str, Enum):
     pentest = "pentest"
     gap_assessment = "gap_assessment"
     vulnerability_assessment = "vulnerability_assessment"
-    tabletop = "tabletop"
-    tsa_directive = "tsa_directive"
+    tabletop = "tabletop"          # legacy — hidden from UI, no builder yet
+    tsa_directive = "tsa_directive"  # legacy — hidden from UI, no builder yet
     compliance_assessment = "compliance_assessment"
+    risk = "risk"
 
 
 class EngagementStatusEnum(str, Enum):
@@ -36,6 +37,7 @@ class ReportStatusEnum(str, Enum):
 
 
 class SectionTypeEnum(str, Enum):
+    # Original section types (all reports)
     executive_summary = "executive_summary"
     findings_summary = "findings_summary"
     crown_jewel = "crown_jewel"
@@ -46,6 +48,19 @@ class SectionTypeEnum(str, Enum):
     informational = "informational"
     closing = "closing"
     appendix = "appendix"
+    # Builder section types
+    findings = "findings"
+    report_title = "report_title"
+    scope_and_methodology = "scope_and_methodology"
+    scope_and_rules_of_engagement = "scope_and_rules_of_engagement"
+    methodology = "methodology"
+    attack_path = "attack_path"
+    risk_assessment_approach = "risk_assessment_approach"
+    risk_assessment_result = "risk_assessment_result"
+    compliance_framework_overview = "compliance_framework_overview"
+    compliance_maturity = "compliance_maturity"
+    gap_analysis = "gap_analysis"
+    remediation_roadmap = "remediation_roadmap"
 
 
 class RefTypeEnum(str, Enum):

@@ -64,26 +64,44 @@ async def create_report(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Creates a report and seeds the default set of report sections.
-    engagement_id is optional — a report can be created unlinked and
-    assigned to an engagement later via the /link endpoint.
+    Creates a report and seeds sections based on the engagement's type.
+    engagement_id is required — the engagement type determines which
+    builder structure (section layout) to seed.
     """
-    # Only validate the engagement if one was provided
+    from rawreporter.utils.enums import EngagementTypeEnum
+
+    # Determine the section structure to seed.
+    # Priority: engagement type → report types[0] → no seeding (empty report).
+    engagement_type: EngagementTypeEnum | None = None
+
     if payload.engagement_id:
         engagement = await db.get(Engagement, payload.engagement_id)
         if not engagement:
             raise HTTPException(status_code=404, detail="Engagement not found")
+        if engagement.types:
+            try:
+                engagement_type = EngagementTypeEnum(engagement.types[0])
+            except ValueError:
+                pass  # unknown type — skip seeding
+    elif payload.types:
+        try:
+            engagement_type = EngagementTypeEnum(payload.types[0])
+        except ValueError:
+            pass  # unknown type — skip seeding
 
     data = payload.model_dump()
     if data.get("start_date") is None:
         data["start_date"] = date.today()
     report = Report(**data)
     db.add(report)
-    await db.flush()  # Get the report ID before seeding sections
+    await db.flush()  # get the report ID before seeding sections
 
-    # Automatically create the standard section structure (Executive Summary,
-    # Critical Findings, High Findings, etc.) for the new report
-    await seed_report_sections(report.id, db)
+    if engagement_type is not None:
+        try:
+            await seed_report_sections(report.id, engagement_type, db)
+        except HTTPException:
+            pass  # unsupported type (tabletop etc.) — create empty report
+
     await db.commit()
     await db.refresh(report)
     return report

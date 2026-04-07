@@ -74,6 +74,7 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
             user_id=user.id,
             resource_id=user.id,
             resource_name=user.username,
+            details={"email": user.email},
             ip_address=ip,
         )
         await self.user_db.session.commit()

@@ -66,6 +66,7 @@ const TYPE_LABEL: Record<EngagementType, string> = {
   tabletop: "Tabletop",
   tsa_directive: "TSA Directive",
   compliance_assessment: "Compliance Assessment",
+  risk: "Risk Assessment",
 };
 
 // ── Status Update Modal ────────────────────────────────────────────────────

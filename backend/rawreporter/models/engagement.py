@@ -47,5 +47,6 @@ class Engagement(UUIDMixin, TimestampMixin, Base):
 
     client: Mapped["Client"] = relationship(back_populates="engagements")
     reports: Mapped[list["Report"]] = relationship(
-        back_populates="engagement", cascade="all, delete-orphan"
+        back_populates="engagement",
+        passive_deletes=True,
     )

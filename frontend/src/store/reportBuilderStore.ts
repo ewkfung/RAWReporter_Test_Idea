@@ -12,8 +12,6 @@ interface ReportBuilderState {
     findingsBySection: Record<string, Finding[]>
   ) => void;
 
-  moveSection: (fromIndex: number, toIndex: number) => void;
-
   moveFinding: (findingId: string, targetSectionId: string, newPosition: number) => void;
 
   reorderFinding: (findingId: string, newPosition: number) => void;
@@ -34,14 +32,6 @@ export const useReportBuilderStore = create<ReportBuilderState>((set) => ({
 
   setReport: (id, sections, findingsBySection) =>
     set({ activeReportId: id, sections, findingsBySection }),
-
-  moveSection: (fromIndex, toIndex) =>
-    set((state) => {
-      const sections = [...state.sections];
-      const [moved] = sections.splice(fromIndex, 1);
-      sections.splice(toIndex, 0, moved);
-      return { sections };
-    }),
 
   moveFinding: (findingId, targetSectionId, newPosition) =>
     set((state) => {

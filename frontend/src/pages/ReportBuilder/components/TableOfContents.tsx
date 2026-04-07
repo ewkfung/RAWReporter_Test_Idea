@@ -1,5 +1,5 @@
 import React from "react";
-import type { Finding } from "../../../types/models";
+import type { Finding, ReportSection } from "../../../types/models";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -11,48 +11,88 @@ interface TocItem {
 }
 
 interface TableOfContentsProps {
+  sections: ReportSection[];   // sorted by position, all sections including severity
   findingsBySection: Record<string, Finding[]>;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const TOP_ITEMS: TocItem[] = [
-  { id: "rb-title",            label: "Report Title",        level: 0 },
-  { id: "rb-exec-summary",     label: "Executive Summary",   level: 0 },
-  { id: "rb-findings-review",  label: "Findings Review",     level: 0 },
-  { id: "rb-crown-jewel",      label: "Crown Jewel",         level: 0 },
-  { id: "rb-findings-overview",label: "Findings Overview",   level: 0 },
-  { id: "rb-findings",         label: "Findings",            level: 0 },
-];
-
-const SEVERITY_ITEMS: TocItem[] = [
-  { id: "rb-sev-critical",     label: "Critical",     level: 1, severity: "critical" },
-  { id: "rb-sev-high",         label: "High",         level: 1, severity: "high" },
-  { id: "rb-sev-medium",       label: "Medium",       level: 1, severity: "medium" },
-  { id: "rb-sev-low",          label: "Low",          level: 1, severity: "low" },
-  { id: "rb-sev-informational",label: "Informational",level: 1, severity: "informational" },
-];
-
-const BOTTOM_ITEMS: TocItem[] = [
-  { id: "rb-conclusion", label: "Conclusion", level: 0 },
-];
-
-const ALL_ITEMS = [...TOP_ITEMS, ...SEVERITY_ITEMS, ...BOTTOM_ITEMS];
-
 const SEVERITY_COLORS: Record<string, string> = {
-  critical:     "var(--severity-critical)",
-  high:         "var(--severity-high)",
-  medium:       "var(--severity-medium)",
-  low:          "var(--severity-low)",
-  informational:"var(--severity-info)",
+  critical:      "var(--severity-critical)",
+  high:          "var(--severity-high)",
+  medium:        "var(--severity-medium)",
+  low:           "var(--severity-low)",
+  informational: "var(--severity-info)",
+};
+
+const SEVERITY_LABEL: Record<string, string> = {
+  critical:      "Critical",
+  high:          "High",
+  medium:        "Medium",
+  low:           "Low",
+  informational: "Informational",
 };
 
 const BREADCRUMB_HEIGHT = 52; // px — sticky breadcrumb bar height
 
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function buildTocItems(sections: ReportSection[]): TocItem[] {
+  const items: TocItem[] = [];
+
+  // Legacy fallback: if there's no report_title section, add a static title entry
+  const hasReportTitle = sections.some((s) => s.section_type === "report_title");
+  if (!hasReportTitle) {
+    items.push({ id: "rb-legacy-title", label: "Report Title", level: 0 });
+  }
+
+  for (const section of sections) {
+    // Skip severity sub-sections — they appear as children of the findings block
+    if (section.severity_filter !== null) continue;
+
+    if (section.section_type === "findings") {
+      items.push({
+        id: `rb-section-${section.id}`,
+        label: section.title ?? "Findings",
+        level: 0,
+      });
+      // Add severity sub-items (use the ids set by FindingsSection)
+      for (const sev of ["critical", "high", "medium", "low", "informational"]) {
+        items.push({
+          id: `rb-sev-${sev}`,
+          label: SEVERITY_LABEL[sev],
+          level: 1,
+          severity: sev,
+        });
+      }
+      continue;
+    }
+
+    items.push({
+      id: `rb-section-${section.id}`,
+      label: section.title ?? section.section_type.replace(/_/g, " "),
+      level: 0,
+    });
+  }
+
+  // Legacy fallback: if there's no findings section, add static findings entries
+  const hasFindings = sections.some((s) => s.section_type === "findings");
+  if (!hasFindings) {
+    items.push({ id: "rb-findings-overview", label: "Findings Overview", level: 0 });
+    items.push({ id: "rb-findings", label: "Findings", level: 0 });
+    for (const sev of ["critical", "high", "medium", "low", "informational"]) {
+      items.push({ id: `rb-sev-${sev}`, label: SEVERITY_LABEL[sev], level: 1, severity: sev });
+    }
+  }
+
+  return items;
+}
+
 // ── Component ──────────────────────────────────────────────────────────────
 
-export function TableOfContents({ findingsBySection }: TableOfContentsProps) {
-  const [activeId, setActiveId] = React.useState<string>("rb-title");
+export function TableOfContents({ sections, findingsBySection }: TableOfContentsProps) {
+  const tocItems = React.useMemo(() => buildTocItems(sections), [sections]);
+  const [activeId, setActiveId] = React.useState<string>("");
 
   // Count findings per severity across all sections
   const allFindings = Object.values(findingsBySection).flat();
@@ -61,18 +101,16 @@ export function TableOfContents({ findingsBySection }: TableOfContentsProps) {
     countBySeverity[f.severity_effective] = (countBySeverity[f.severity_effective] ?? 0) + 1;
   }
 
-  // Track active section via IntersectionObserver
+  // Track active section via scroll position
   React.useEffect(() => {
-    const ids = ALL_ITEMS.map((i) => i.id);
-    const elements = ids
-      .map((id) => document.getElementById(id))
-      .filter(Boolean) as HTMLElement[];
+    const ids = tocItems.map((i) => i.id);
+    const getElements = () =>
+      ids.map((id) => document.getElementById(id)).filter(Boolean) as HTMLElement[];
 
-    if (elements.length === 0) return;
-
-    // Use scroll position to determine the topmost visible section
     const onScroll = () => {
-      let currentId = ids[0];
+      const elements = getElements();
+      if (elements.length === 0) return;
+      let currentId = ids[0] ?? "";
       for (const el of elements) {
         const rect = el.getBoundingClientRect();
         if (rect.top <= BREADCRUMB_HEIGHT + 32) {
@@ -83,10 +121,9 @@ export function TableOfContents({ findingsBySection }: TableOfContentsProps) {
     };
 
     window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll(); // run once on mount
-
+    onScroll();
     return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [tocItems]);
 
   const scrollTo = (id: string) => {
     const el = document.getElementById(id);
@@ -97,8 +134,7 @@ export function TableOfContents({ findingsBySection }: TableOfContentsProps) {
 
   const renderItem = (item: TocItem) => {
     const isActive = activeId === item.id;
-    const count =
-      item.severity != null ? (countBySeverity[item.severity] ?? 0) : null;
+    const count = item.severity != null ? (countBySeverity[item.severity] ?? 0) : null;
     const dotColor = item.severity ? SEVERITY_COLORS[item.severity] : null;
 
     return (
@@ -129,20 +165,9 @@ export function TableOfContents({ findingsBySection }: TableOfContentsProps) {
           if (!isActive) e.currentTarget.style.background = "transparent";
         }}
       >
-        {/* Severity dot */}
         {dotColor && (
-          <span
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: dotColor,
-              flexShrink: 0,
-            }}
-          />
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
         )}
-
-        {/* Label */}
         <span
           style={{
             flex: 1,
@@ -161,15 +186,12 @@ export function TableOfContents({ findingsBySection }: TableOfContentsProps) {
         >
           {item.label}
         </span>
-
-        {/* Count badge for severity items */}
         {count != null && count > 0 && (
           <span
             style={{
               fontSize: 11,
               fontWeight: 600,
               color: dotColor ?? "var(--color-gray-500)",
-              background: "transparent",
               flexShrink: 0,
               lineHeight: 1,
             }}
@@ -209,16 +231,8 @@ export function TableOfContents({ findingsBySection }: TableOfContentsProps) {
       >
         On this page
       </p>
-
       <div style={{ display: "flex", flexDirection: "column" }}>
-        {TOP_ITEMS.map(renderItem)}
-
-        {/* Severity sub-items */}
-        <div style={{ marginTop: 1, marginBottom: 1 }}>
-          {SEVERITY_ITEMS.map(renderItem)}
-        </div>
-
-        {BOTTOM_ITEMS.map(renderItem)}
+        {tocItems.map(renderItem)}
       </div>
     </nav>
   );

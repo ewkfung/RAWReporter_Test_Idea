@@ -49,6 +49,8 @@ _PERMISSIONS: list[tuple[str, str, str]] = [
     ("user", "deactivate", "Deactivate users"),
     ("user", "assign_roles", "Assign roles to users"),
     ("audit_log", "view", "View audit logs"),
+    ("report_default_template", "view", "View default report templates"),
+    ("report_default_template", "edit", "Edit default report templates"),
 ]
 
 # Role definitions: name → (display_name, description, permission keys)
@@ -70,6 +72,7 @@ _ROLES: list[tuple[str, str, str, list[str]]] = [
             "finding:view", "finding:create", "finding:edit", "finding:delete", "finding:move",
             "library_finding:view",
             "evidence:view", "evidence:upload", "evidence:delete",
+            "report_default_template:view",
         ],
     ),
     (
@@ -83,6 +86,7 @@ _ROLES: list[tuple[str, str, str, list[str]]] = [
             "finding:view", "finding:create", "finding:edit", "finding:delete", "finding:move",
             "library_finding:view",
             "evidence:view", "evidence:upload",
+            "report_default_template:view",
         ],
     ),
     (
@@ -96,6 +100,7 @@ _ROLES: list[tuple[str, str, str, list[str]]] = [
             "finding:view",
             "library_finding:view",
             "evidence:view",
+            "report_default_template:view",
         ],
     ),
 ]

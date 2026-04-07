@@ -69,6 +69,17 @@ function UsersIcon() {
   );
 }
 
+function TemplatesIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+      <rect x="2" y="2" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M5 5h6M5 8h6M5 11h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="12" cy="11" r="2.5" fill="var(--color-white)" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M11.3 11h1.4M12 10.3v1.4" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function AuditLogIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
@@ -96,6 +107,7 @@ export function Sidebar() {
   const { user, logout } = useAuthStore();
   const canViewUsers = usePermission("user", "view");
   const canViewAuditLog = usePermission("audit_log", "view");
+  const canEditTemplates = usePermission("report_default_template", "edit");
   const { sidebarCollapsed, toggleSidebar } = React.useContext(LayoutContext);
 
   const w = sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH;
@@ -189,7 +201,7 @@ export function Sidebar() {
           </NavLink>
         ))}
 
-        {(canViewUsers || canViewAuditLog) && (
+        {(canViewUsers || canViewAuditLog || canEditTemplates) && (
           <div style={{ marginTop: 16 }}>
             {!sidebarCollapsed && (
               <p style={{
@@ -257,6 +269,33 @@ export function Sidebar() {
               >
                 <AuditLogIcon />
                 {!sidebarCollapsed && "Logs"}
+              </NavLink>
+            )}
+            {canEditTemplates && (
+              <NavLink
+                to="/settings/templates"
+                title={sidebarCollapsed ? "Templates" : undefined}
+                style={({ isActive }) => ({
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: sidebarCollapsed ? "center" : "flex-start",
+                  gap: 10,
+                  padding: sidebarCollapsed ? "9px 0" : "8px 12px",
+                  borderRadius: "var(--radius-sm)",
+                  fontSize: 14,
+                  fontWeight: isActive ? 600 : 400,
+                  color: isActive ? "var(--color-primary)" : "var(--color-gray-500)",
+                  background: isActive ? "var(--color-primary-light)" : "transparent",
+                  borderLeft: (!sidebarCollapsed && isActive) ? "2px solid var(--color-primary)" : "2px solid transparent",
+                  marginBottom: 2,
+                  transition: "background 0.1s, color 0.1s",
+                  textDecoration: "none",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                })}
+              >
+                <TemplatesIcon />
+                {!sidebarCollapsed && "Templates"}
               </NavLink>
             )}
           </div>

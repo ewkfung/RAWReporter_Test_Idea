@@ -332,11 +332,14 @@ export function AuditLogPage() {
               const username = row.user_id
                 ? (userMap.get(row.user_id) ?? row.user_id.slice(0, 8) + "…")
                 : "System";
-              const detailsText = row.details
-                ? Object.entries(row.details)
-                    .map(([k, v]) => `${k}: ${v}`)
-                    .join(" · ")
-                : null;
+              const detailParts: string[] = [];
+              if (row.details) {
+                Object.entries(row.details).forEach(([k, v]) =>
+                  detailParts.push(`${k.replace(/_/g, " ")}: ${String(v)}`)
+                );
+              }
+              if (row.ip_address) detailParts.push(`IP: ${row.ip_address}`);
+              const detailsText = detailParts.length > 0 ? detailParts.join(" · ") : null;
 
               return (
                 <div

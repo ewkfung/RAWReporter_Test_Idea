@@ -12,6 +12,7 @@ import { ErrorState } from "../../components/ui/ErrorState";
 import { ConfirmModal } from "../../components/ui/ConfirmModal";
 import { EngagementFormModal } from "../../components/engagements/EngagementFormModal";
 import { StatusChangeModal } from "../../components/engagements/StatusChangeModal";
+import { ReportFormModal } from "../../components/reports/ReportFormModal";
 import { usePermission } from "../../hooks/usePermission";
 import { useToast } from "../../components/ui/useToast";
 import {
@@ -23,8 +24,6 @@ import { getClients } from "../../api/clients";
 import { listUsers } from "../../api/users";
 import {
   getReports,
-  createReport,
-  getUnlinkedReports,
   linkReport,
   unlinkReport,
 } from "../../api/reports";
@@ -67,9 +66,10 @@ export const TYPE_LABEL: Record<EngagementType, string> = {
   pentest: "Pentest",
   gap_assessment: "Gap Assessment",
   vulnerability_assessment: "Vuln Assessment",
-  tabletop: "Tabletop",
-  tsa_directive: "TSA Directive",
+  tabletop: "Tabletop",         // legacy — display only
+  tsa_directive: "TSA Directive", // legacy — display only
   compliance_assessment: "Compliance",
+  risk: "Risk Assessment",
 };
 
 const TYPE_COLOR: Record<EngagementType, { bg: string; color: string }> = {
@@ -79,6 +79,7 @@ const TYPE_COLOR: Record<EngagementType, { bg: string; color: string }> = {
   tabletop: { bg: "#ccfbf1", color: "#0d9488" },
   tsa_directive: { bg: "#dbeafe", color: "#2563eb" },
   compliance_assessment: { bg: "#f3f4f6", color: "#6b7280" },
+  risk: { bg: "#d1fae5", color: "#065f46" },
 };
 
 // ── Type pills ─────────────────────────────────────────────────────────────
@@ -227,12 +228,18 @@ function AddReportModal({
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [saving, setSaving] = React.useState(false);
 
-  const { data: unlinked = [], isLoading } = useQuery({
-    queryKey: ["reports-unlinked"],
-    queryFn: getUnlinkedReports,
+  const { data: allReports = [], isLoading } = useQuery({
+    queryKey: ["reports"],
+    queryFn: () => getReports(),
     enabled: isOpen,
     staleTime: 0,
   });
+
+  // Show all reports not already linked to this engagement
+  const available = React.useMemo(
+    () => allReports.filter((r) => r.engagement_id !== engagementId),
+    [allReports, engagementId]
+  );
 
   const REPORT_STATUS_LABEL: Record<string, string> = {
     draft: "Draft", review: "Review", editing: "Editing",
@@ -257,7 +264,6 @@ function AddReportModal({
     try {
       await Promise.all([...selected].map((id) => linkReport(id, engagementId)));
       queryClient.invalidateQueries({ queryKey: ["reports", "by-engagement", engagementId] });
-      queryClient.invalidateQueries({ queryKey: ["reports-unlinked"] });
       queryClient.invalidateQueries({ queryKey: ["reports"] });
       toast.success(`${selected.size} report${selected.size > 1 ? "s" : ""} added to engagement`);
       onSuccess();
@@ -281,12 +287,12 @@ function AddReportModal({
         <div style={{ flex: 1, overflowY: "auto", minHeight: 0, border: "1px solid var(--color-gray-200)", borderRadius: "var(--radius-sm)" }}>
           {isLoading ? (
             <div style={{ display: "flex", justifyContent: "center", padding: 24 }}><Spinner size={20} /></div>
-          ) : unlinked.length === 0 ? (
+          ) : available.length === 0 ? (
             <div style={{ padding: 20, textAlign: "center", fontSize: 13, color: "var(--color-gray-400)" }}>
-              No unlinked reports available. Create a report from the Reports page first.
+              No reports available to add.
             </div>
           ) : (
-            unlinked.map((r) => (
+            available.map((r) => (
               <label
                 key={r.id}
                 style={{
@@ -464,10 +470,8 @@ function EngagementReports({
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const toast = useToast();
   const [newReportOpen, setNewReportOpen] = React.useState(false);
   const [addReportOpen, setAddReportOpen] = React.useState(false);
-  const [creating, setCreating] = React.useState(false);
 
   const { data: reports = [], isLoading } = useQuery({
     queryKey: ["reports", "by-engagement", engagementId],
@@ -482,21 +486,6 @@ function EngagementReports({
   const REPORT_STATUS_LABEL: Record<string, string> = {
     draft: "Draft", review: "Review", editing: "Editing",
     final_review: "Final Review", complete: "Complete",
-  };
-
-  const handleCreateReport = async (title: string) => {
-    setCreating(true);
-    try {
-      const report = await createReport({ engagement_id: engagementId, title });
-      queryClient.invalidateQueries({ queryKey: ["reports", "by-engagement", engagementId] });
-      queryClient.invalidateQueries({ queryKey: ["reports"] });
-      toast.success("Report created");
-      navigate(`/reports/${report.id}/build`);
-    } catch {
-      toast.error("Failed to create report");
-    } finally {
-      setCreating(false);
-    }
   };
 
   if (isLoading) {
@@ -558,7 +547,16 @@ function EngagementReports({
         </div>
       )}
 
-      <ReportQuickCreate isOpen={newReportOpen} onClose={() => setNewReportOpen(false)} onConfirm={handleCreateReport} loading={creating} />
+      <ReportFormModal
+        isOpen={newReportOpen}
+        onClose={() => setNewReportOpen(false)}
+        engagementId={engagementId}
+        onSuccess={() => {
+          setNewReportOpen(false);
+          queryClient.invalidateQueries({ queryKey: ["reports", "by-engagement", engagementId] });
+          queryClient.invalidateQueries({ queryKey: ["reports"] });
+        }}
+      />
 
       <AddReportModal
         isOpen={addReportOpen}
@@ -566,28 +564,6 @@ function EngagementReports({
         onClose={() => setAddReportOpen(false)}
         onSuccess={() => setAddReportOpen(false)}
       />
-    </div>
-  );
-}
-
-// ── Inline quick-create report modal ──────────────────────────────────────
-
-function ReportQuickCreate({ isOpen, onClose, onConfirm, loading }: { isOpen: boolean; onClose: () => void; onConfirm: (title: string) => void; loading: boolean }) {
-  const [title, setTitle] = React.useState("");
-  React.useEffect(() => { if (isOpen) setTitle(""); }, [isOpen]);
-  if (!isOpen) return null;
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
-      <div style={{ background: "var(--color-white)", borderRadius: "var(--radius-md)", padding: 24, width: "min(90vw, 400px)", boxShadow: "var(--shadow-xl)" }} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700 }}>New Report</h3>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <Input label="Report Title" required value={title} onChange={(e) => setTitle(e.target.value)} />
-        </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 20 }}>
-          <Button variant="secondary" onClick={onClose} disabled={loading}>Cancel</Button>
-          <Button variant="primary" onClick={() => onConfirm(title)} loading={loading} disabled={!title.trim()}>Create Report</Button>
-        </div>
-      </div>
     </div>
   );
 }

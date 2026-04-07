@@ -1,10 +1,13 @@
 import React from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "../../../components/ui/Button";
 import { Modal } from "../../../components/ui/Modal";
+import { UserPickerOverlay, UserChip } from "../../../components/ui/UserPickerOverlay";
 import { useToast } from "../../../components/ui/useToast";
 import { updateReport } from "../../../api/reports";
-import type { Finding, Report } from "../../../types/models";
+import { updateEngagement } from "../../../api/engagements";
+import { listUsers } from "../../../api/users";
+import type { Engagement, Finding, Report } from "../../../types/models";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -12,13 +15,12 @@ interface ReportActionsPanelProps {
   report: Report;
   findings: Finding[];
   canEditReport: boolean;
+  engagement?: Engagement;
 }
 
 type ReportStatus = "draft" | "review" | "editing" | "final_review" | "complete";
 
 // ── Constants ──────────────────────────────────────────────────────────────
-
-const BREADCRUMB_HEIGHT = 52;
 
 const TYPE_LABELS: Record<string, string> = {
   pentest:                  "Pentest",
@@ -105,9 +107,75 @@ function DateField({
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export function ReportActionsPanel({ report, findings, canEditReport }: ReportActionsPanelProps) {
+export function ReportActionsPanel({ report, findings, canEditReport, engagement }: ReportActionsPanelProps) {
   const toast = useToast();
   const queryClient = useQueryClient();
+
+  // Local editable state for lead / consultants — synced from engagement prop
+  const [leadId, setLeadId] = React.useState<string | null>(engagement?.engagement_lead_id ?? null);
+  const [consultantIds, setConsultantIds] = React.useState<string[]>(engagement?.consultant_ids ?? []);
+  const [leadPickerOpen, setLeadPickerOpen] = React.useState(false);
+  const [consultantPickerOpen, setConsultantPickerOpen] = React.useState(false);
+
+  // Sync when engagement prop changes (e.g. after refetch)
+  React.useEffect(() => {
+    setLeadId(engagement?.engagement_lead_id ?? null);
+    setConsultantIds(engagement?.consultant_ids ?? []);
+  }, [engagement?.engagement_lead_id, engagement?.consultant_ids]);
+
+  // Fetch all users for picker and name resolution
+  const { data: users = [], isLoading: usersLoading } = useQuery({
+    queryKey: ["users"],
+    queryFn: listUsers,
+    staleTime: 120_000,
+    enabled: !!engagement,
+  });
+
+  const userMap = React.useMemo(
+    () => new Map(users.map((u) => [u.id, u])),
+    [users]
+  );
+
+  const displayName = (id: string) => {
+    const u = userMap.get(id);
+    if (!u) return id.slice(0, 8) + "…";
+    return [u.first_name, u.last_name].filter(Boolean).join(" ") || u.username;
+  };
+
+  // Save engagement lead / consultants immediately on change
+  const saveEngagement = React.useCallback(
+    (patch: { engagement_lead_id?: string | null; consultant_ids?: string[] }) => {
+      if (!engagement) return;
+      updateEngagement(engagement.id, patch)
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ["engagement", engagement.id] });
+        })
+        .catch(() => toast.error("Failed to save"));
+    },
+    [engagement, queryClient, toast]
+  );
+
+  const handleSetLead = (userId: string) => {
+    setLeadId(userId);
+    saveEngagement({ engagement_lead_id: userId });
+  };
+
+  const handleRemoveLead = () => {
+    setLeadId(null);
+    saveEngagement({ engagement_lead_id: null });
+  };
+
+  const handleAddConsultant = (userId: string) => {
+    const next = [...consultantIds, userId];
+    setConsultantIds(next);
+    saveEngagement({ consultant_ids: next });
+  };
+
+  const handleRemoveConsultant = (userId: string) => {
+    const next = consultantIds.filter((id) => id !== userId);
+    setConsultantIds(next);
+    saveEngagement({ consultant_ids: next });
+  };
 
   const [statusOpen, setStatusOpen] = React.useState(false);
   const [generateOpen, setGenerateOpen] = React.useState(false);
@@ -208,16 +276,13 @@ export function ReportActionsPanel({ report, findings, canEditReport }: ReportAc
   return (
     <div
       style={{
-        position: "sticky",
-        top: BREADCRUMB_HEIGHT + 24,
         width: 192,
         flexShrink: 0,
         alignSelf: "flex-start",
         display: "flex",
         flexDirection: "column",
         gap: 12,
-        maxHeight: `calc(100vh - ${BREADCRUMB_HEIGHT + 48}px)`,
-        overflowY: "auto",
+        paddingBottom: 32,
       }}
     >
       {/* ── Report type card ── */}
@@ -360,6 +425,100 @@ export function ReportActionsPanel({ report, findings, canEditReport }: ReportAc
         </div>
       </div>
 
+      {/* ── Lead card ── */}
+      {engagement && (
+        <div
+          style={{
+            background: "var(--color-white)",
+            border: "1px solid var(--color-gray-200)",
+            borderRadius: "var(--radius-lg)",
+            padding: "14px 16px",
+            boxShadow: "var(--shadow-sm)",
+          }}
+        >
+          <p style={SECTION_LABEL}>Lead</p>
+          {leadId ? (
+            <UserChip
+              label={displayName(leadId)}
+              onRemove={canEditReport ? handleRemoveLead : undefined}
+            />
+          ) : canEditReport ? (
+            <button
+              type="button"
+              onClick={() => setLeadPickerOpen(true)}
+              style={{
+                fontSize: 12,
+                padding: "5px 10px",
+                border: "1px dashed var(--color-gray-300)",
+                borderRadius: "var(--radius-sm)",
+                background: "none",
+                cursor: "pointer",
+                color: "var(--color-primary)",
+                fontWeight: 500,
+                width: "100%",
+                textAlign: "left",
+              }}
+            >
+              + Select Lead
+            </button>
+          ) : (
+            <span style={{ fontSize: 13, color: "var(--color-gray-400)", fontStyle: "italic" }}>
+              Unassigned
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* ── Users card ── */}
+      {engagement && (
+        <div
+          style={{
+            background: "var(--color-white)",
+            border: "1px solid var(--color-gray-200)",
+            borderRadius: "var(--radius-lg)",
+            padding: "14px 16px",
+            boxShadow: "var(--shadow-sm)",
+          }}
+        >
+          <p style={SECTION_LABEL}>Users</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {consultantIds.map((id) => (
+              <UserChip
+                key={id}
+                label={displayName(id)}
+                onRemove={canEditReport ? () => handleRemoveConsultant(id) : undefined}
+              />
+            ))}
+          </div>
+          {canEditReport && (
+            <button
+              type="button"
+              onClick={() => setConsultantPickerOpen(true)}
+              style={{
+                fontSize: 12,
+                padding: "5px 10px",
+                border: "1px dashed var(--color-gray-300)",
+                borderRadius: "var(--radius-sm)",
+                background: "none",
+                cursor: "pointer",
+                color: "var(--color-primary)",
+                fontWeight: 500,
+                width: "100%",
+                textAlign: "left",
+                marginTop: consultantIds.length > 0 ? 6 : 0,
+              }}
+            >
+              + Add User
+            </button>
+          )}
+          {!canEditReport && consultantIds.length === 0 && (
+            <span style={{ fontSize: 13, color: "var(--color-gray-400)", fontStyle: "italic" }}>
+              None assigned
+            </span>
+          )}
+        </div>
+      )}
+
       {/* ── Dates card ── */}
       <div
         style={{
@@ -413,6 +572,26 @@ export function ReportActionsPanel({ report, findings, canEditReport }: ReportAc
           Generate Report
         </Button>
       </div>
+
+      {/* ── Lead / consultant pickers ── */}
+      <UserPickerOverlay
+        isOpen={leadPickerOpen}
+        title="Select Lead"
+        excludeIds={leadId ? [leadId] : []}
+        users={users}
+        isLoading={usersLoading}
+        onSelect={(u) => handleSetLead(u.id)}
+        onClose={() => setLeadPickerOpen(false)}
+      />
+      <UserPickerOverlay
+        isOpen={consultantPickerOpen}
+        title="Add User"
+        excludeIds={consultantIds}
+        users={users}
+        isLoading={usersLoading}
+        onSelect={(u) => handleAddConsultant(u.id)}
+        onClose={() => setConsultantPickerOpen(false)}
+      />
 
       {/* ── Generate modal ── */}
       {generateOpen && (

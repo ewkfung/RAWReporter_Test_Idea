@@ -6,9 +6,10 @@ export type EngagementType =
   | "pentest"
   | "gap_assessment"
   | "vulnerability_assessment"
-  | "tabletop"
-  | "tsa_directive"
-  | "compliance_assessment";
+  | "tabletop"       // legacy — hidden from UI, no builder yet
+  | "tsa_directive"  // legacy — hidden from UI, no builder yet
+  | "compliance_assessment"
+  | "risk";
 
 export type EngagementStatus =
   | "scoping"
@@ -31,7 +32,20 @@ export type SectionType =
   | "low_findings"
   | "informational"
   | "closing"
-  | "appendix";
+  | "appendix"
+  // Builder section types
+  | "findings"
+  | "report_title"
+  | "scope_and_methodology"
+  | "scope_and_rules_of_engagement"
+  | "methodology"
+  | "attack_path"
+  | "risk_assessment_approach"
+  | "risk_assessment_result"
+  | "compliance_framework_overview"
+  | "compliance_maturity"
+  | "gap_analysis"
+  | "remediation_roadmap";
 
 export type RefType = "cve" | "cwe" | "cisa" | "nist" | "nvd" | "manufacturer";
 

@@ -190,7 +190,7 @@ async def create_user(
         user_id=current_user.id,
         resource_id=user.id,
         resource_name=user.username,
-        details={"role_name": role.name},
+        details={"email": user.email, "role": role.name},
         ip_address=request.client.host if request.client else None,
     )
     await db.commit()
@@ -223,6 +223,7 @@ async def update_user(
             user_id=current_user.id,
             resource_id=user_id,
             resource_name=user.username,
+            details={"changed_by": current_user.username},
             ip_address=request.client.host if request.client else None,
         )
     await db.commit()
@@ -254,7 +255,7 @@ async def assign_role(
         user_id=current_user.id,
         resource_id=user_id,
         resource_name=user.username,
-        details={"role_name": role.name},
+        details={"role": role.name, "assigned_by": current_user.username},
     )
     await db.commit()
 
@@ -279,6 +280,7 @@ async def deactivate_user(
         user_id=current_user.id,
         resource_id=user_id,
         resource_name=user.username,
+        details={"email": user.email},
         ip_address=request.client.host if request.client else None,
     )
     await db.commit()
@@ -305,6 +307,7 @@ async def delete_user(
         user_id=current_user.id,
         resource_id=user_id,
         resource_name=username,
+        details={"deleted_by": current_user.username},
         ip_address=request.client.host if request.client else None,
     )
     await db.commit()

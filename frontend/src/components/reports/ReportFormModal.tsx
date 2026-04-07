@@ -36,12 +36,11 @@ const STATUS_OPTIONS = [
 ];
 
 const TYPE_OPTIONS: { value: EngagementType; label: string }[] = [
-  { value: "pentest", label: "Pentest" },
-  { value: "gap_assessment", label: "Gap Assessment" },
   { value: "vulnerability_assessment", label: "Vulnerability Assessment" },
-  { value: "tabletop", label: "Tabletop Exercise" },
-  { value: "tsa_directive", label: "TSA Directive" },
-  { value: "compliance_assessment", label: "Compliance Assessment" },
+  { value: "pentest",                  label: "Penetration Testing" },
+  { value: "risk",                     label: "Risk Assessment" },
+  { value: "compliance_assessment",    label: "Compliance Assessment" },
+  { value: "gap_assessment",           label: "Security Gap Assessment" },
 ];
 
 // ── Props ─────────────────────────────────────────────────────────────────
@@ -97,7 +96,7 @@ export function ReportFormModal({
     enabled: isOpen,
   });
 
-  // Only show engagements belonging to the currently selected customer
+  // Filter engagements by selected customer; if no customer selected, show all
   const clientEngagements = React.useMemo(() => {
     if (!clientId) return allEngagements;
     return allEngagements.filter((e) => e.client_id === clientId);
@@ -146,7 +145,15 @@ export function ReportFormModal({
     if (!engStillValid) setSelectedEngagementId("");
   };
 
-  // Only report name is required — engagement is optional
+  // When engagement is selected, auto-populate the customer dropdown
+  const handleEngagementChange = (engId: string) => {
+    setSelectedEngagementId(engId);
+    if (engId) {
+      const eng = allEngagements.find((e) => e.id === engId);
+      if (eng) setClientId(eng.client_id);
+    }
+  };
+
   const isValid = title.trim();
 
   const setFieldError = (field: string, msg: string) =>
@@ -211,8 +218,7 @@ export function ReportFormModal({
   ];
 
   const engagementOptions = [
-    // If a customer is selected, allow saving without an engagement
-    { value: "", label: clientId ? "No engagement (unlinked)" : "Select a customer first…" },
+    { value: "", label: "No engagement (optional)" },
     ...clientEngagements.map((e: Engagement) => ({ value: e.id, label: e.title })),
   ];
 
@@ -252,22 +258,19 @@ export function ReportFormModal({
           placeholder="e.g. Q2 2026 Pentest Report"
         />
 
-        {/* Customer selection drives the Engagement dropdown */}
+        {/* Customer filters the engagement dropdown; auto-populated when engagement is selected */}
         <Select
           label="Customer"
-          required
           value={clientId}
           onChange={(e) => handleClientChange(e.target.value)}
           options={clientOptions}
         />
 
-        {/* Disabled until a customer is selected */}
         <Select
           label="Engagement"
           value={selectedEngagementId}
-          onChange={(e) => setSelectedEngagementId(e.target.value)}
+          onChange={(e) => handleEngagementChange(e.target.value)}
           options={engagementOptions}
-          disabled={!clientId}
         />
 
         <Select
