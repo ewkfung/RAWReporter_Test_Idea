@@ -328,7 +328,7 @@ function ReportRow({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(180px,2fr) minmax(140px,1.2fr) minmax(160px,1.5fr) 110px 120px 100px auto auto",
+          gridTemplateColumns: "minmax(180px,2fr) minmax(140px,1.2fr) minmax(160px,1.5fr) 110px 120px 100px 110px 88px",
           alignItems: "center",
           gap: 20,
           padding: "14px 20px",
@@ -558,7 +558,7 @@ export function ReportsPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(180px,2fr) minmax(140px,1.2fr) minmax(160px,1.5fr) 110px 120px 100px auto auto",
+          gridTemplateColumns: "minmax(180px,2fr) minmax(140px,1.2fr) minmax(160px,1.5fr) 110px 120px 100px 110px 88px",
           gap: 20,
           padding: "0 20px 8px",
           borderBottom: "1px solid var(--color-gray-200)",

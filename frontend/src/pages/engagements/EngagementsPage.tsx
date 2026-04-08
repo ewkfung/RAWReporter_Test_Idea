@@ -629,7 +629,7 @@ function EngagementRow({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "24px 1fr 160px 1fr auto auto auto",
+          gridTemplateColumns: "24px 1fr 160px 1fr 110px 100px 88px",
           alignItems: "center",
           gap: 16,
           padding: "14px 16px",
@@ -672,19 +672,19 @@ function EngagementRow({
         </button>
 
         {/* 3. Type pills */}
-        <div onClick={(e) => e.stopPropagation()}>
+        <div onClick={(e) => e.stopPropagation()} style={{ justifySelf: "start" }}>
           <TypePills types={engagement.types} />
         </div>
 
         {/* 4. Status */}
-        <div onClick={(e) => e.stopPropagation()} style={{ flexShrink: 0 }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ justifySelf: "start" }}>
           <Badge variant={STATUS_BADGE[engagement.status] ?? "neutral"}>
             {STATUS_LABEL[engagement.status] ?? engagement.status}
           </Badge>
         </div>
 
         {/* 5. Last Updated */}
-        <div style={{ fontSize: 12, color: "var(--color-gray-400)", whiteSpace: "nowrap", flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ fontSize: 12, color: "var(--color-gray-400)", whiteSpace: "nowrap", justifySelf: "start" }} onClick={(e) => e.stopPropagation()}>
           {formatRelativeTime(engagement.updated_at)}
         </div>
 
@@ -979,14 +979,14 @@ export function EngagementsPage() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "24px 1fr 160px 1fr auto auto",
+          gridTemplateColumns: "24px 1fr 160px 1fr 110px 100px 88px",
           gap: 16,
           padding: "0 16px 8px",
           borderBottom: "1px solid var(--color-gray-200)",
           marginBottom: 8,
         }}
       >
-        {["", "Engagement", "Customer", "Type", "Status", "Last Updated"].map((h) => (
+        {["", "Engagement", "Customer", "Type", "Status", "Last Updated", ""].map((h) => (
           <span key={h} style={{ fontSize: 11, fontWeight: 600, color: "var(--color-gray-400)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
             {h}
           </span>
