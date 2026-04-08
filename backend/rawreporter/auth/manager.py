@@ -34,9 +34,9 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
         The OAuth2 form field is called 'username' — we first try to match it
         against our username column, then fall back to email.
         """
-        # Try username lookup
+        # Try username lookup (case-insensitive)
         result = await self.user_db.session.execute(
-            select(User).where(User.username == credentials.username)
+            select(User).where(func.lower(User.username) == credentials.username.lower())
         )
         user = result.scalar_one_or_none()
 

@@ -4,7 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi_users.password import PasswordHelper
 from pydantic import BaseModel, ConfigDict, EmailStr
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rawreporter.auth import current_active_user
@@ -113,6 +113,8 @@ async def update_me(
     db: AsyncSession = Depends(get_db),
 ):
     for field, value in payload.model_dump(exclude_unset=True).items():
+        if field == "username" and value is not None:
+            value = value.lower()
         setattr(current_user, field, value)
     await db.commit()
     return await _get_user_with_roles(current_user.id, db)
@@ -157,8 +159,10 @@ async def create_user(
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Email already registered")
 
-    # Check username uniqueness
-    existing_u = await db.execute(select(User).where(User.username == payload.username))
+    # Check username uniqueness (case-insensitive)
+    existing_u = await db.execute(
+        select(User).where(func.lower(User.username) == payload.username.lower())
+    )
     if existing_u.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Username already taken")
 
@@ -171,7 +175,7 @@ async def create_user(
 
     user = User(
         email=payload.email,
-        username=payload.username,
+        username=payload.username.lower(),
         first_name=payload.first_name,
         last_name=payload.last_name,
         hashed_password=hashed,
@@ -212,6 +216,8 @@ async def update_user(
     data = payload.model_dump(exclude_unset=True)
     password = data.pop("password", None)
     for field, value in data.items():
+        if field == "username" and value is not None:
+            value = value.lower()
         setattr(user, field, value)
     if password:
         password_helper = PasswordHelper()
