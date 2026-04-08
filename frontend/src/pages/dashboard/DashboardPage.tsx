@@ -16,35 +16,64 @@ import type { BadgeVariant } from "../../components/ui/Badge";
 
 const STALE = 120_000; // 2 minutes
 
-// ── Status/audience badge helpers ──────────────────────────────────────────
+// ── Status badge helpers ────────────────────────────────────────────────────
 
 const ENGAGEMENT_STATUS_BADGE: Record<string, BadgeVariant> = {
-  scoping: "neutral",
-  active: "success",
+  scoping:   "neutral",
+  active:    "success",
   in_review: "warning",
   delivered: "blue",
-  closed: "neutral",
+  completed: "success",
+  closed:    "neutral",
 };
 
 const ENGAGEMENT_STATUS_LABEL: Record<string, string> = {
-  scoping: "Scoping",
-  active: "Active",
+  scoping:   "Scoping",
+  active:    "Active",
   in_review: "In Review",
   delivered: "Delivered",
-  closed: "Closed",
+  completed: "Completed",
+  closed:    "Closed",
 };
 
 const REPORT_STATUS_BADGE: Record<string, BadgeVariant> = {
-  draft: "neutral",
-  in_review: "warning",
-  final: "success",
+  draft:        "neutral",
+  review:       "warning",
+  editing:      "warning",
+  final_review: "blue",
+  complete:     "success",
 };
 
 const REPORT_STATUS_LABEL: Record<string, string> = {
-  draft: "Draft",
-  in_review: "In Review",
-  final: "Final",
+  draft:        "Draft",
+  review:       "In Review",
+  editing:      "Editing",
+  final_review: "Final Review",
+  complete:     "Complete",
 };
+
+// ── Date helpers ────────────────────────────────────────────────────────────
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function daysOverdue(today: Date, dateStr: string): number {
+  return Math.floor((today.getTime() - new Date(dateStr).getTime()) / 86_400_000);
+}
+
+function endDateColor(today: Date, dateStr: string): string {
+  const d = new Date(dateStr);
+  if (d < today) return "#dc2626";
+  const sevenDays = new Date(today);
+  sevenDays.setDate(sevenDays.getDate() + 7);
+  if (d <= sevenDays) return "#d97706";
+  return "var(--color-gray-500)";
+}
 
 // ── Summary card ───────────────────────────────────────────────────────────
 
@@ -159,12 +188,59 @@ export function DashboardPage() {
     staleTime: STALE,
   });
 
+  // Today at midnight for consistent date comparisons
+  const today = React.useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
   // Derived counts
   const activeEngagements = engagements?.filter(
     (e) => e.status === "active" || e.status === "in_review"
   );
   const inProgressReports = reports?.filter(
     (r) => r.status === "draft" || r.status === "review" || r.status === "editing"
+  );
+
+  // Notice panels — past end_date, no completed_date
+  const overdueEngagements = React.useMemo(() =>
+    engagements
+      ? engagements
+          .filter((e) => e.end_date && !e.completed_date && new Date(e.end_date) < today)
+          .sort((a, b) => new Date(a.end_date!).getTime() - new Date(b.end_date!).getTime())
+      : [],
+    [engagements, today]
+  );
+
+  const overdueReports = React.useMemo(() =>
+    reports
+      ? reports
+          .filter((r) => r.end_date && !r.completed_date && new Date(r.end_date) < today)
+          .sort((a, b) => new Date(a.end_date!).getTime() - new Date(b.end_date!).getTime())
+      : [],
+    [reports, today]
+  );
+
+  // Due date panels — top 10 with end_date set, sorted soonest first
+  const upcomingEngagements = React.useMemo(() =>
+    engagements
+      ? [...engagements]
+          .filter((e) => e.end_date != null)
+          .sort((a, b) => new Date(a.end_date!).getTime() - new Date(b.end_date!).getTime())
+          .slice(0, 10)
+      : [],
+    [engagements]
+  );
+
+  const upcomingReports = React.useMemo(() =>
+    reports
+      ? [...reports]
+          .filter((r) => r.end_date != null)
+          .sort((a, b) => new Date(a.end_date!).getTime() - new Date(b.end_date!).getTime())
+          .slice(0, 10)
+      : [],
+    [reports]
   );
 
   // Quick access lists (last 5, sorted by updated_at desc)
@@ -201,6 +277,13 @@ export function DashboardPage() {
     textTransform: "uppercase",
     letterSpacing: "0.05em",
     marginBottom: 10,
+  };
+
+  const panelStyle: React.CSSProperties = {
+    background: "var(--color-white)",
+    border: "1px solid var(--color-gray-200)",
+    borderRadius: "var(--radius-md)",
+    overflow: "hidden",
   };
 
   const allSummaryLoading = loadingClients && loadingEngagements && loadingReports && loadingLibrary;
@@ -252,20 +335,261 @@ export function DashboardPage() {
         </div>
       )}
 
+      {/* ── Notice panels ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
+
+        {/* Engagement Notices */}
+        <div>
+          <p style={sectionLabelStyle}>Engagement Notices</p>
+          <div style={{ ...panelStyle, borderLeft: "4px solid #d97706" }}>
+            {loadingEngagements ? (
+              <div style={{ display: "flex", justifyContent: "center", padding: 24 }}>
+                <Spinner size={20} />
+              </div>
+            ) : overdueEngagements.length === 0 ? (
+              <div style={{ padding: "16px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 14, color: "#16a34a" }}>✓</span>
+                <span style={{ fontSize: 13, color: "var(--color-gray-500)" }}>All engagements up to date.</span>
+              </div>
+            ) : (
+              overdueEngagements.map((e, idx) => (
+                <div
+                  key={e.id}
+                  onClick={() => navigate(`/engagements?expand=${e.id}`)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    padding: "10px 14px",
+                    borderBottom: idx < overdueEngagements.length - 1 ? "1px solid var(--color-gray-100)" : "none",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(el) => (el.currentTarget.style.background = "var(--color-gray-50)")}
+                  onMouseLeave={(el) => (el.currentTarget.style.background = "transparent")}
+                >
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-gray-900)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 2 }}>
+                      {e.title}
+                    </div>
+                    <span style={{ fontSize: 12, color: "var(--color-gray-400)" }}>
+                      {clientMap[e.client_id] ?? "—"}
+                    </span>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "#dc2626",
+                      background: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      borderRadius: 4,
+                      padding: "2px 6px",
+                      flexShrink: 0,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {daysOverdue(today, e.end_date!)}d overdue
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Report Notices */}
+        <div>
+          <p style={sectionLabelStyle}>Report Notices</p>
+          <div style={{ ...panelStyle, borderLeft: "4px solid #d97706" }}>
+            {loadingReports ? (
+              <div style={{ display: "flex", justifyContent: "center", padding: 24 }}>
+                <Spinner size={20} />
+              </div>
+            ) : overdueReports.length === 0 ? (
+              <div style={{ padding: "16px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 14, color: "#16a34a" }}>✓</span>
+                <span style={{ fontSize: 13, color: "var(--color-gray-500)" }}>All reports up to date.</span>
+              </div>
+            ) : (
+              overdueReports.map((r, idx) => (
+                <div
+                  key={r.id}
+                  onClick={() => navigate(`/reports/${r.id}/build`)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    padding: "10px 14px",
+                    borderBottom: idx < overdueReports.length - 1 ? "1px solid var(--color-gray-100)" : "none",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(el) => (el.currentTarget.style.background = "var(--color-gray-50)")}
+                  onMouseLeave={(el) => (el.currentTarget.style.background = "transparent")}
+                >
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--color-gray-900)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginBottom: 2 }}>
+                      {r.title}
+                    </div>
+                    <span style={{ fontSize: 12, color: "var(--color-gray-400)" }}>
+                      {(r.engagement_id ? engagementMap[r.engagement_id] : null) ?? "—"}
+                    </span>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "#dc2626",
+                      background: "#fef2f2",
+                      border: "1px solid #fecaca",
+                      borderRadius: 4,
+                      padding: "2px 6px",
+                      flexShrink: 0,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {daysOverdue(today, r.end_date!)}d overdue
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Due date panels ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
+
+        {/* Upcoming Engagements */}
+        <div>
+          <p style={sectionLabelStyle}>Upcoming Engagements</p>
+          <div style={panelStyle}>
+            {loadingEngagements ? (
+              <div style={{ display: "flex", justifyContent: "center", padding: 24 }}>
+                <Spinner size={20} />
+              </div>
+            ) : upcomingEngagements.length === 0 ? (
+              <div style={{ padding: "24px 16px", textAlign: "center" }}>
+                <p style={{ fontSize: 13, color: "var(--color-gray-400)", margin: 0 }}>
+                  No engagements with a due date.
+                </p>
+              </div>
+            ) : (
+              upcomingEngagements.map((e, idx) => (
+                <div
+                  key={e.id}
+                  onClick={() => navigate(`/engagements?expand=${e.id}`)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    padding: "10px 14px",
+                    borderBottom: idx < upcomingEngagements.length - 1 ? "1px solid var(--color-gray-100)" : "none",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(el) => (el.currentTarget.style.background = "var(--color-gray-50)")}
+                  onMouseLeave={(el) => (el.currentTarget.style.background = "transparent")}
+                >
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                      <Badge variant={ENGAGEMENT_STATUS_BADGE[e.status] ?? "neutral"}>
+                        {ENGAGEMENT_STATUS_LABEL[e.status] ?? e.status}
+                      </Badge>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-gray-900)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {e.title}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: 12, color: "var(--color-gray-400)" }}>
+                      {clientMap[e.client_id] ?? "—"}
+                    </span>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: endDateColor(today, e.end_date!),
+                      flexShrink: 0,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {formatDate(e.end_date!)}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Upcoming Reports */}
+        <div>
+          <p style={sectionLabelStyle}>Upcoming Reports</p>
+          <div style={panelStyle}>
+            {loadingReports ? (
+              <div style={{ display: "flex", justifyContent: "center", padding: 24 }}>
+                <Spinner size={20} />
+              </div>
+            ) : upcomingReports.length === 0 ? (
+              <div style={{ padding: "24px 16px", textAlign: "center" }}>
+                <p style={{ fontSize: 13, color: "var(--color-gray-400)", margin: 0 }}>
+                  No reports with a due date.
+                </p>
+              </div>
+            ) : (
+              upcomingReports.map((r, idx) => (
+                <div
+                  key={r.id}
+                  onClick={() => navigate(`/reports/${r.id}/build`)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    padding: "10px 14px",
+                    borderBottom: idx < upcomingReports.length - 1 ? "1px solid var(--color-gray-100)" : "none",
+                    cursor: "pointer",
+                  }}
+                  onMouseEnter={(el) => (el.currentTarget.style.background = "var(--color-gray-50)")}
+                  onMouseLeave={(el) => (el.currentTarget.style.background = "transparent")}
+                >
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                      <Badge variant={REPORT_STATUS_BADGE[r.status] ?? "neutral"}>
+                        {REPORT_STATUS_LABEL[r.status] ?? r.status}
+                      </Badge>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--color-gray-900)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {r.title}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: 12, color: "var(--color-gray-400)" }}>
+                      {(r.engagement_id ? engagementMap[r.engagement_id] : null) ?? "—"}
+                    </span>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: endDateColor(today, r.end_date!),
+                      flexShrink: 0,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {formatDate(r.end_date!)}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* ── Quick access ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
 
         {/* Recent Engagements */}
         <div>
           <p style={sectionLabelStyle}>Recent Engagements</p>
-          <div
-            style={{
-              background: "var(--color-white)",
-              border: "1px solid var(--color-gray-200)",
-              borderRadius: "var(--radius-md)",
-              overflow: "hidden",
-            }}
-          >
+          <div style={panelStyle}>
             {loadingEngagements ? (
               <div style={{ display: "flex", justifyContent: "center", padding: 32 }}>
                 <Spinner size={24} />
@@ -331,14 +655,7 @@ export function DashboardPage() {
         {/* Reports In Progress */}
         <div>
           <p style={sectionLabelStyle}>Reports In Progress</p>
-          <div
-            style={{
-              background: "var(--color-white)",
-              border: "1px solid var(--color-gray-200)",
-              borderRadius: "var(--radius-md)",
-              overflow: "hidden",
-            }}
-          >
+          <div style={panelStyle}>
             {loadingReports ? (
               <div style={{ display: "flex", justifyContent: "center", padding: 32 }}>
                 <Spinner size={24} />

@@ -3,7 +3,9 @@ import { Outlet, Navigate } from "react-router-dom";
 import { Sidebar } from "./Sidebar";
 import { LayoutContext } from "./LayoutContext";
 import { ToastContainer } from "../ui/Toast";
+import { InactivityWarningModal } from "../ui/InactivityWarningModal";
 import { useAuthStore } from "../../store/authStore";
+import { useInactivityTimer } from "../../hooks/useInactivityTimer";
 import { useQuery } from "@tanstack/react-query";
 import { getMe, fetchMyPermissions } from "../../api/auth";
 
@@ -28,6 +30,8 @@ export function AppLayout() {
   }, []);
 
   const toggleSidebar = () => setSidebarCollapsed((v) => !v);
+
+  const { showWarning, secondsLeft, onStayActive } = useInactivityTimer();
 
   const { isError } = useQuery({
     queryKey: ["me"],
@@ -56,6 +60,11 @@ export function AppLayout() {
           <Outlet />
         </div>
         <ToastContainer />
+        <InactivityWarningModal
+          isOpen={showWarning}
+          secondsLeft={secondsLeft}
+          onStayActive={onStayActive}
+        />
       </div>
     </LayoutContext.Provider>
   );
