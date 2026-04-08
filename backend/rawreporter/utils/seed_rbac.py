@@ -77,6 +77,7 @@ _ROLES: list[tuple[str, str, str, list[str]]] = [
             "finding:view", "finding:create", "finding:edit", "finding:delete", "finding:move",
             "library_finding:view",
             "evidence:view", "evidence:upload", "evidence:delete",
+            "user:view",
             "report_default_template:view",
             "platform_setting:view",
             "document_template:view",
